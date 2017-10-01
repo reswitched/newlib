@@ -56,7 +56,7 @@
 	.word 0
 	.word \name
 #else
-	.dword \name
+	.word \name
 #endif
 .endm
 
@@ -272,13 +272,13 @@ FUNCTION (_cpu_init_hook):
 	.set __stack_base__, StackBase
 #endif
 	.global	__stack_base__
-HeapBase:	.dword	0
-HeapLimit:	.dword	0
-StackBase:	.dword	0
-StackLimit:	.dword	0
-env:		.dword	0	/* Dummy environment array */
+HeapBase:	.word	0
+HeapLimit:	.word	0
+StackBase:	.word	0
+StackLimit:	.word	0
+env:		.word	0	/* Dummy environment array */
 CommandLine:	.space	256,0	/*  Maximum length of 255 chars handled.  */
 AngelSVCArgs:
 	GEN_DWORD CommandLine
-	.dword	255
+	.word	255
 #endif

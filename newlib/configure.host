@@ -571,6 +571,9 @@ case "${host}" in
   z8k-*-coff)
 	sys_dir=z8ksim
 	;;
+  aarch64-*-switch*)
+	sys_dir=switch
+	;;
 esac
 
 # Host specific flag settings -- usually for features that are not

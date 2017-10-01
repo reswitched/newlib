@@ -551,6 +551,12 @@ PACKAGE_STRING=
 PACKAGE_BUGREPORT=
 PACKAGE_URL=
 
+AR_FOR_TARGET=llvm-ar-5.0
+AS_FOR_TARGET="llmc-5.0 -arch=aarch64 -mattr=+neon"
+LD_FOR_TARGET=lld-5.0
+RANLIB_FOR_TARGET=llvm-ranlib-5.0
+CC_FOR_TARGET="clang-5.0 -ffreestanding -fexceptions -target aarch64-none-linux-gnu -mtune=cortex-a53 -ccc-gcc-name aarch64-switch-gcc"
+
 ac_unique_file="move-if-change"
 enable_option_checking=no
 ac_subst_vars='LTLIBOBJS
