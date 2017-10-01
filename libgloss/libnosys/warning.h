@@ -1,7 +1,7 @@
 #ifndef __WARNING_H__
 #define __WARNING_H__
 
-#ifdef HAVE_GNU_LD
+#if false//def HAVE_GNU_LD
 # ifdef HAVE_ELF
 
 /* We want the .gnu.warning.SYMBOL section to be unallocated.  */
