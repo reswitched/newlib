@@ -41,6 +41,8 @@ dnl Make sure syscall names match those being used by newlib
 case "${target}" in
   *-*-cygwin*)
 	;;
+  *-*-switch*)
+        ;;
   a29k-amd-udi)
 	;;
   aarch64*-*-*)
