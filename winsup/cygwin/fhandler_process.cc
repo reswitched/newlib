@@ -375,7 +375,7 @@ format_process_fd (void *data, char *&destbuf)
     {
       if (destbuf)
 	cfree (destbuf);
-      destbuf = p->fds (fs);
+      destbuf = p ? p->fds (fs) : NULL;
       *((process_fd_t *) data)->fd_type = virt_symlink;
     }
   else
@@ -391,7 +391,7 @@ format_process_fd (void *data, char *&destbuf)
 	  set_errno (ENOENT);
 	  return 0;
 	}
-      destbuf = p->fd (fd, fs);
+      destbuf = p ? p->fd (fd, fs) : NULL;
       if (!destbuf || !*destbuf)
 	{
 	  set_errno (ENOENT);
@@ -478,7 +478,7 @@ format_process_root (void *data, char *&destbuf)
       cfree (destbuf);
       destbuf = NULL;
     }
-  destbuf = p->root (fs);
+  destbuf = p ? p->root (fs) : NULL;
   if (!destbuf || !*destbuf)
     {
       destbuf = cstrdup ("<defunct>");
@@ -498,7 +498,7 @@ format_process_cwd (void *data, char *&destbuf)
       cfree (destbuf);
       destbuf = NULL;
     }
-  destbuf = p->cwd (fs);
+  destbuf = p ? p->cwd (fs) : NULL;
   if (!destbuf || !*destbuf)
     {
       destbuf = cstrdup ("<defunct>");
@@ -518,7 +518,7 @@ format_process_cmdline (void *data, char *&destbuf)
       cfree (destbuf);
       destbuf = NULL;
     }
-  destbuf = p->cmdline (fs);
+  destbuf = p ? p->cmdline (fs) : NULL;
   if (!destbuf || !*destbuf)
     {
       destbuf = cstrdup ("<defunct>");
@@ -583,7 +583,7 @@ format_process_environ (void *data, char *&destbuf)
       cfree (destbuf);
       destbuf = NULL;
     }
-  destbuf = p->environ (fs);
+  destbuf = p ? p->environ (fs) : NULL;
   if (!destbuf || !*destbuf)
     {
       destbuf = cstrdup ("<defunct>");
