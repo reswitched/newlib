@@ -32,6 +32,9 @@ case "${target}" in
   *-*-elf)
 	objtype=elf-
 	;;
+  *-*-switch)
+        objtype=elf-
+        ;;
 esac
 
 AC_SUBST(objtype)
