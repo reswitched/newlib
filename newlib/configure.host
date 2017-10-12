@@ -571,8 +571,9 @@ case "${host}" in
   z8k-*-coff)
 	sys_dir=z8ksim
 	;;
-  aarch64-*-switch*)
+  *-*-switch*)
 	sys_dir=switch
+       	newlib_cflags="${newlib_cflags} -D__DYNAMIC_REENT__ -DREENTRANT_SYSCALLS_PROVIDED"
 	;;
 esac
 
