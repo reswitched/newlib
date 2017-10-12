@@ -6,7 +6,9 @@
 #include <sys/errno.h>
 #include <sys/time.h>
 #include <stdio.h>
- 
+
+#define BSS_HEAP_SIZE 0x400000
+
 void _exit(); // implemented in libtransistor crt0
 
 int _close(int file) {
@@ -55,8 +57,17 @@ int _read(int file, char *ptr, int len) {
   return -1;
 }
 
+static char bss_heap[BSS_HEAP_SIZE];
+static int bss_heap_allocated = 0;
+
 caddr_t _sbrk(int incr) {
-  return (void*) -1;
+  bss_heap_allocated+= incr;
+  if(bss_heap_allocated > sizeof(bss_heap)) {
+    errno = ENOMEM;
+    return (void*) -1;
+  }
+
+  return bss_heap;
 }
 
 int _stat(const char *file, struct stat *st) {
