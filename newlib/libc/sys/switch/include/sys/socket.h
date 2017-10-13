@@ -35,7 +35,6 @@
 
 #include <sys/cdefs.h>
 #include <sys/_types.h>
-#include <sys/_iovec.h>
 #include <machine/_align.h>
 
 /*
