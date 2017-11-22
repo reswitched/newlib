@@ -7,7 +7,7 @@
 #include <sys/time.h>
 #include <stdio.h>
 
-#define BSS_HEAP_SIZE 0x400000
+#include<libtransistor/context.h>
 
 void _exit(); // implemented in libtransistor crt0
 
@@ -68,17 +68,18 @@ int _read_r(struct _reent *reent, int file, char *ptr, int len) {
   return -1;
 }
 
-static char bss_heap[BSS_HEAP_SIZE];
-static int bss_heap_allocated = 0;
+static size_t data_size = 0;
 
 caddr_t _sbrk_r(struct _reent *reent, int incr) {
-  bss_heap_allocated+= incr;
-  if(bss_heap_allocated > sizeof(bss_heap)) {
+  if(data_size + incr > libtransistor_context->mem_size) {
     reent->_errno = ENOMEM;
     return (void*) -1;
   }
 
-  return bss_heap;
+  void *addr = libtransistor_context->mem_base + data_size;
+  data_size+= incr;
+  
+  return addr;
 }
 
 int _stat_r(struct _reent *reent, const char *file, struct stat *st) {
