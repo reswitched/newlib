@@ -68,7 +68,7 @@ CONFIG_CLEAN_VPATH_FILES =
 LIBRARIES = $(noinst_LIBRARIES)
 ARFLAGS = cru
 lib_a_AR = $(AR) $(ARFLAGS)
-@MAY_SUPPLY_SYSCALLS_TRUE@am__DEPENDENCIES_1 = syscalls.o
+@MAY_SUPPLY_SYSCALLS_TRUE@am__DEPENDENCIES_1 = syscalls.o fd.o
 am_lib_a_OBJECTS =
 lib_a_OBJECTS = $(am_lib_a_OBJECTS)
 DEFAULT_INCLUDES = -I.@am__isrc@
@@ -196,11 +196,11 @@ INCLUDES = $(NEWLIB_CFLAGS) $(CROSS_CFLAGS) $(TARGET_CFLAGS)
 AM_CCASFLAGS = $(INCLUDES)
 noinst_LIBRARIES = lib.a
 @MAY_SUPPLY_SYSCALLS_FALSE@extra_objs = 
-@MAY_SUPPLY_SYSCALLS_TRUE@extra_objs = syscalls.o # add more object files here if you split up
+@MAY_SUPPLY_SYSCALLS_TRUE@extra_objs = syscalls.o fd.o # add more object files here if you split up
 lib_a_SOURCES = 
 lib_a_LIBADD = $(extra_objs)
-EXTRA_lib_a_SOURCES = syscalls.c crt0.c # add more source files here if you split up
-lib_a_DEPENDENCIES = $(extra_objs)      # syscalls.c into multiple files
+EXTRA_lib_a_SOURCES = syscalls.c crt0.c fd.c # add more source files here if you split up
+lib_a_DEPENDENCIES = $(extra_objs)           # syscalls.c into multiple files
 lib_a_CCASFLAGS = $(AM_CCASFLAGS)
 lib_a_CFLAGS = $(AM_CFLAGS)
 ACLOCAL_AMFLAGS = -I ../../..
@@ -274,6 +274,12 @@ lib_a-crt0.o: crt0.c
 
 lib_a-crt0.obj: crt0.c
 	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(lib_a_CFLAGS) $(CFLAGS) -c -o lib_a-crt0.obj `if test -f 'crt0.c'; then $(CYGPATH_W) 'crt0.c'; else $(CYGPATH_W) '$(srcdir)/crt0.c'; fi`
+
+lib_a-fd.o: fd.c
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(lib_a_CFLAGS) $(CFLAGS) -c -o lib_a-fd.o `test -f 'fd.c' || echo '$(srcdir)/'`fd.c
+
+lib_a-fd.obj: fd.c
+	$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(lib_a_CFLAGS) $(CFLAGS) -c -o lib_a-fd.obj `if test -f 'fd.c'; then $(CYGPATH_W) 'fd.c'; else $(CYGPATH_W) '$(srcdir)/fd.c'; fi`
 
 ID: $(HEADERS) $(SOURCES) $(LISP) $(TAGS_FILES)
 	list='$(SOURCES) $(HEADERS) $(LISP) $(TAGS_FILES)'; \

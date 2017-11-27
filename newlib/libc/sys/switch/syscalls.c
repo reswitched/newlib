@@ -8,12 +8,17 @@
 #include <stdio.h>
 
 #include<libtransistor/context.h>
+#include "fd.h"
 
 void _exit(); // implemented in libtransistor crt0
 
 int _close_r(struct _reent *reent, int file) {
-  reent->_errno = ENOSYS;
-  return -1;
+  int res = fd_close(file);
+  if (res < 0) {
+    reent->_errno = -res;
+    return -1;
+  }
+  return 0;
 }
 
 char *_environ[] = {NULL};
@@ -64,8 +69,26 @@ int _open_r(struct _reent *reent, const char *name, int flags, ...) {
 }
 
 int _read_r(struct _reent *reent, int file, char *ptr, int len) {
-  reent->_errno = ENOSYS;
-  return -1;
+  ssize_t res = 0;
+
+  struct file *f = fd_file_get(file);
+  if (f == NULL) {
+    reent->_errno = EBADF;
+    return -1;
+  }
+
+  if (f->ops->write == NULL) {
+    res = -ENOSYS;
+    goto finalize;
+  }
+  res = f->ops->write(f->data, ptr, len);
+finalize:
+  fd_file_put(f);
+  if (res < 0) {
+    reent->_errno = -res;
+    return -1;
+  }
+  return 0;
 }
 
 static size_t data_size = 0;
@@ -103,8 +126,26 @@ int _wait_r(struct _reent *reent, int *status) {
 }
 
 int _write_r(struct _reent *reent, int file, char *ptr, int len) {
-  reent->_errno = ENOSYS;
-  return -1;
+  ssize_t res = 0;
+
+  struct file *f = fd_file_get(file);
+  if (f == NULL) {
+    reent->_errno = EBADF;
+    return -1;
+  }
+
+  if (f->ops->write == NULL) {
+    res = -ENOSYS;
+    goto finalize;
+  }
+  res = f->ops->write(f->data, ptr, len);
+finalize:
+  fd_file_put(f);
+  if (res < 0) {
+    reent->_errno = -res;
+    return -1;
+  }
+  return 0;
 }
 
 int _gettimeofday_r(struct _reent *reent, struct timeval *__restrict p, void *__restrict z) {
