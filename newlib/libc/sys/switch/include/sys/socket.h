@@ -665,6 +665,8 @@ int	setfib(int);
 int	setsockopt(int, int, int, const void *, socklen_t);
 int	shutdown(int, int);
 int	sockatmark(int);
+// TODO: Switch addition
+int	socket_from_bsd(int);
 int	socket(int, int, int);
 int	socketpair(int, int, int, int *);
 __END_DECLS

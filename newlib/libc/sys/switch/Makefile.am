@@ -5,15 +5,15 @@ AM_CCASFLAGS = $(INCLUDES)
 noinst_LIBRARIES = lib.a
  
 if MAY_SUPPLY_SYSCALLS
-extra_objs = syscalls.o fd.o # add more object files here if you split up
-else                         # syscalls.c into multiple files in the previous step
+extra_objs = syscalls.o fd.o socket.o # add more object files here if you split up
+else                                  # syscalls.c into multiple files in the previous step
 extra_objs =
 endif
  
 lib_a_SOURCES =
 lib_a_LIBADD = $(extra_objs)
-EXTRA_lib_a_SOURCES = syscalls.c crt0.c fd.c # add more source files here if you split up
-lib_a_DEPENDENCIES = $(extra_objs)           # syscalls.c into multiple files
+EXTRA_lib_a_SOURCES = syscalls.c crt0.c fd.c socket.c # add more source files here if you split up
+lib_a_DEPENDENCIES = $(extra_objs)                    # syscalls.c into multiple files
 lib_a_CCASFLAGS = $(AM_CCASFLAGS)
 lib_a_CFLAGS = $(AM_CFLAGS)
  
