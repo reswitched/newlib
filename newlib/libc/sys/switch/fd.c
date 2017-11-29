@@ -4,7 +4,7 @@
 #include "fd.h"
 
 #define FD_MAX 1024
-static struct file *fds[FD_MAX] = {0};
+static _Atomic(struct file *)fds[FD_MAX] = {ATOMIC_VAR_INIT(NULL)};
 
 int fd_create_file(struct file_operations *fops, void *data) {
 	if (fops == NULL)
@@ -19,13 +19,10 @@ int fd_create_file(struct file_operations *fops, void *data) {
 	f->refcount = 1;
 
 	int fd = 0;
-	// TODO: Use atomic operations to CAS the pointer. stdatomic doesn't import
-	// properly with newlib right now :(
-	while (fd < FD_MAX && fds[fd] != NULL) {
+	while (fd < FD_MAX && atomic_compare_exchange_weak(&fds[fd], NULL, f)) {
 		fd++;
 	}
 	if (fd < FD_MAX) {
-		fds[fd] = f;
 		return fd;
 	} else {
 		free(f);
@@ -34,42 +31,59 @@ int fd_create_file(struct file_operations *fops, void *data) {
 }
 
 struct file *fd_file_get(int fd) {
-	// TODO: lock the fd before recovering the file and incrementing its refcount
 	struct file *f = fds[fd];
 	if (f == NULL)
 		return NULL;
-	f->refcount++;
+	// TODO: This doesn't work. If, between acquiring f and adding 1, the file
+	// is freed, we'll blow up ! We'd need a way to avoid the null-check, so
+	// we could add first, and acquire f afterward...
+	if (atomic_fetch_add(&f->refcount, 1) == 1) {
+		// The file was decremented, and will probably be freed soon...
+		return NULL;
+	}
 	return f;
 }
 
 void fd_file_put(struct file *file) {
 	if (file == NULL)
 		return;
-	if (--file->refcount == 0) {
+
+	// If we're the last to abandon our pointer, we're responsible for
+	// destroying it.
+	if (atomic_fetch_sub(&file->refcount, 1) == 1) {
 		file->ops->release(file);
 		free(file);
 	}
 }
 
 int fd_close(int fd) {
-	// TODO: Atomically swap fds[fd] with NULL.
-	if (fds[fd] == NULL)
+	// First, make sure the file is unreachable from this point on.
+	struct file *file = atomic_exchange(&fds[fd], NULL);
+	if (file == NULL)
 		return -EBADF;
-	fd_file_put(fds[fd]);
-	fds[fd] = NULL;
+
+	// Then, actually release the file
+	fd_file_put(file);
 	return 0;
 }
 
 int dup2(int oldfd, int newfd) {
 	struct file *f;
+	struct file *old;
 
 	// If oldfd == newfd, we need to return newfd without closing it.
 	if (oldfd == newfd)
 		return newfd;
 
-	// TODO: Lock newfd first, close it, set it to the oldfd's file, and unlock
-	fd_close(newfd);
+	// Acquire the old file
 	f = fd_file_get(oldfd);
-	fds[newfd] = f;
+
+	// "Close" and duplicate our file.
+	old = atomic_exchange(&fds[newfd], f);
+
+	// Actually free the old file if necessary.
+	if (old != NULL)
+		fd_file_put(old);
+
 	return newfd;
 }

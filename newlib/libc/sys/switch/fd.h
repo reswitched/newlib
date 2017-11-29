@@ -1,6 +1,8 @@
 #pragma once
 
 #include <sys/types.h>
+#include <stdint.h>
+#include <stdatomic.h>
 
 struct file;
 
@@ -46,7 +48,7 @@ struct file_operations {
 };
 
 struct file {
-	int refcount;
+	atomic_int refcount;
 	struct file_operations *ops;
 	void *data;
 };
