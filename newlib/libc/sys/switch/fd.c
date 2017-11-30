@@ -1,10 +1,26 @@
 #include <errno.h>
 #include <stdlib.h>
-
+#include <libtransistor/nx.h>
 #include "fd.h"
 
 #define FD_MAX 1024
-static _Atomic(struct file *)fds[FD_MAX] = {ATOMIC_VAR_INIT(NULL)};
+struct fd {
+	atomic_int lock;
+	_Atomic(struct file *)file;
+};
+
+static struct fd fds[FD_MAX] = {{
+	.lock = ATOMIC_VAR_INIT(0),
+	.file = ATOMIC_VAR_INIT(NULL)
+}};
+
+static void lock_fd(struct fd *fd) {
+	int expected = 0;
+	while (!atomic_compare_exchange_strong(&fd->lock, &expected, 1)) {
+		// Yield
+		svcSleepThread(0);
+	}
+}
 
 int fd_create_file(struct file_operations *fops, void *data) {
 	if (fops == NULL)
@@ -19,7 +35,8 @@ int fd_create_file(struct file_operations *fops, void *data) {
 	f->refcount = 1;
 
 	int fd = 0;
-	while (fd < FD_MAX && atomic_compare_exchange_weak(&fds[fd], NULL, f)) {
+	struct file *expected = NULL;
+	while (fd < FD_MAX && atomic_compare_exchange_strong(&fds[fd].file, &expected, f)) {
 		fd++;
 	}
 	if (fd < FD_MAX) {
@@ -31,16 +48,18 @@ int fd_create_file(struct file_operations *fops, void *data) {
 }
 
 struct file *fd_file_get(int fd) {
-	struct file *f = fds[fd];
+	// First, acquire the lock for this fd
+	lock_fd(&fds[fd]);
+
+	// The fd is locked. We can now acquire the underlying file
+	struct file *f = fds[fd].file;
 	if (f == NULL)
-		return NULL;
-	// TODO: This doesn't work. If, between acquiring f and adding 1, the file
-	// is freed, we'll blow up ! We'd need a way to avoid the null-check, so
-	// we could add first, and acquire f afterward...
-	if (atomic_fetch_add(&f->refcount, 1) == 1) {
-		// The file was decremented, and will probably be freed soon...
-		return NULL;
-	}
+		goto end;
+	// And increment its counter
+	f->refcount++;
+end:
+	// Before releasing the lock
+	fds[fd].lock = 0;
 	return f;
 }
 
@@ -57,10 +76,16 @@ void fd_file_put(struct file *file) {
 }
 
 int fd_close(int fd) {
-	// First, make sure the file is unreachable from this point on.
-	struct file *file = atomic_exchange(&fds[fd], NULL);
+	// First, make sure we lock the fd
+	lock_fd(&fds[fd]);
+
+	// Then, make sure the file is unreachable from this point on.
+	struct file *file = atomic_exchange(&fds[fd].file, NULL);
 	if (file == NULL)
 		return -EBADF;
+
+	// We can now give up the lock
+	fds[fd].lock = 0;
 
 	// Then, actually release the file
 	fd_file_put(file);
@@ -77,9 +102,19 @@ int dup2(int oldfd, int newfd) {
 
 	// Acquire the old file
 	f = fd_file_get(oldfd);
+	if (f == NULL) {
+		errno = EBADF;
+		return -1;
+	}
+
+	// Then, lock the fd
+	lock_fd(&fds[newfd]);
 
 	// "Close" and duplicate our file.
-	old = atomic_exchange(&fds[newfd], f);
+	old = atomic_exchange(&fds[newfd].file, f);
+
+	// We can release the lock now
+	fds[newfd].lock = 0;
 
 	// Actually free the old file if necessary.
 	if (old != NULL)
