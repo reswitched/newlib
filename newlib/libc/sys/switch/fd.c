@@ -4,6 +4,7 @@
 #include "fd.h"
 
 #define FD_MAX 1024
+#define IS_VALID(fd) fd >= 0 && fd < FD_MAX
 struct fd {
 	atomic_int lock;
 	_Atomic(struct file *)file;
@@ -48,6 +49,10 @@ int fd_create_file(struct file_operations *fops, void *data) {
 }
 
 struct file *fd_file_get(int fd) {
+	if (!IS_VALID(fd)) {
+		return NULL;
+	}
+
 	// First, acquire the lock for this fd
 	lock_fd(&fds[fd]);
 
@@ -76,6 +81,10 @@ void fd_file_put(struct file *file) {
 }
 
 int fd_close(int fd) {
+	if (!IS_VALID(fd)) {
+		return -EBADF;
+	}
+
 	// First, make sure we lock the fd
 	lock_fd(&fds[fd]);
 
@@ -95,6 +104,11 @@ int fd_close(int fd) {
 int dup2(int oldfd, int newfd) {
 	struct file *f;
 	struct file *old;
+
+	if (!IS_VALID(oldfd) || !IS_VALID(newfd)) {
+		errno = EBADF;
+		return -1;
+	}
 
 	// If oldfd == newfd, we need to return newfd without closing it.
 	if (oldfd == newfd)
