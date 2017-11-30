@@ -4,16 +4,13 @@
 #include "fd.h"
 
 #define FD_MAX 1024
-#define IS_VALID(fd) fd >= 0 && fd < FD_MAX
+#define IS_VALID(fd) ((fd) >= 0 && (fd) < FD_MAX)
 struct fd {
 	atomic_int lock;
 	_Atomic(struct file *)file;
 };
 
-static struct fd fds[FD_MAX] = {{
-	.lock = ATOMIC_VAR_INIT(0),
-	.file = ATOMIC_VAR_INIT(NULL)
-}};
+static struct fd fds[FD_MAX] = {0};
 
 static void lock_fd(struct fd *fd) {
 	int expected = 0;
@@ -37,7 +34,7 @@ int fd_create_file(struct file_operations *fops, void *data) {
 
 	int fd = 0;
 	struct file *expected = NULL;
-	while (fd < FD_MAX && atomic_compare_exchange_strong(&fds[fd].file, &expected, f)) {
+	while (fd < FD_MAX && !atomic_compare_exchange_strong(&fds[fd].file, &expected, f)) {
 		fd++;
 	}
 	if (fd < FD_MAX) {
