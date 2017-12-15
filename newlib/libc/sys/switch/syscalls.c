@@ -77,29 +77,29 @@ int _read_r(struct _reent *reent, int file, char *ptr, int len) {
     return -1;
   }
 
-  if (f->ops->write == NULL) {
+  if (f->ops->read == NULL) {
     res = -ENOSYS;
     goto finalize;
   }
-  res = f->ops->write(f->data, ptr, len);
+  res = f->ops->read(f->data, ptr, len);
 finalize:
   fd_file_put(f);
   if (res < 0) {
     reent->_errno = -res;
     return -1;
   }
-  return 0;
+  return res;
 }
 
 static size_t data_size = 0;
 
 caddr_t _sbrk_r(struct _reent *reent, int incr) {
-  if(data_size + incr > libtransistor_context->mem_size) {
+  if(data_size + incr > libtransistor_context.mem_size) {
     reent->_errno = ENOMEM;
     return (void*) -1;
   }
 
-  void *addr = libtransistor_context->mem_base + data_size;
+  void *addr = libtransistor_context.mem_base + data_size;
   data_size+= incr;
   
   return addr;
@@ -145,7 +145,7 @@ finalize:
     reent->_errno = -res;
     return -1;
   }
-  return 0;
+  return res;
 }
 
 int _gettimeofday_r(struct _reent *reent, struct timeval *__restrict p, void *__restrict z) {
