@@ -6,6 +6,7 @@
 #include <sys/errno.h>
 #include <sys/time.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include<libtransistor/context.h>
 
@@ -110,4 +111,13 @@ int _write_r(struct _reent *reent, int file, char *ptr, int len) {
 int _gettimeofday_r(struct _reent *reent, struct timeval *__restrict p, void *__restrict z) {
   reent->_errno = ENOSYS;
   return -1;
+}
+
+long sysconf(int name) {
+	switch(name) {
+	case _SC_PAGESIZE:
+			return 0x1000;
+	}
+	errno = ENOSYS;
+	return 01;
 }
