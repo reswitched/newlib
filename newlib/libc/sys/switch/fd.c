@@ -32,7 +32,7 @@ int fd_create_file(struct file_operations *fops, void *data) {
 	f->data = data;
 	f->refcount = 1;
 
-	int fd = 0;
+	int fd = 10;
 	struct file *expected = NULL;
 	while (fd < FD_MAX && !atomic_compare_exchange_strong(&fds[fd].file, &expected, f)) {
 		fd++;
