@@ -59,9 +59,27 @@ int _link_r(struct _reent *reent, char *old, char *new) {
   return -1;
 }
 
-int _lseek_r(struct _reent *reent, int file, int ptr, int dir) {
-  reent->_errno = ENOSYS;
-  return -1;
+int _lseek_r(struct _reent *reent, int file, int pos, int whence) {
+  ssize_t res = 0;
+
+  struct file *f = fd_file_get(file);
+  if (f == NULL) {
+    reent->_errno = EBADF;
+    return -1;
+  }
+
+  if (f->ops->llseek == NULL) {
+    res = -ENOSYS;
+    goto finalize;
+  }
+  res = f->ops->llseek(f->data, pos, whence);
+finalize:
+  fd_file_put(f);
+  if (res < 0) {
+    reent->_errno = -res;
+    return -1;
+  }
+  return res;
 }
 
 int _open_r(struct _reent *reent, const char *name, int flags, ...) {
