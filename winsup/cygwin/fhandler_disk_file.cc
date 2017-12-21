@@ -1075,10 +1075,7 @@ int
 fhandler_disk_file::fadvise (off_t offset, off_t length, int advice)
 {
   if (advice < POSIX_FADV_NORMAL || advice > POSIX_FADV_NOREUSE)
-    {
-      set_errno (EINVAL);
-      return -1;
-    }
+    return EINVAL;
 
   /* Windows only supports advice flags for the whole file.  We're using
      a simplified test here so that we don't have to ask for the actual
@@ -1097,9 +1094,7 @@ fhandler_disk_file::fadvise (off_t offset, off_t length, int advice)
   NTSTATUS status = NtQueryInformationFile (get_handle (), &io,
 					    &fmi, sizeof fmi,
 					    FileModeInformation);
-  if (!NT_SUCCESS (status))
-    __seterrno_from_nt_status (status);
-  else
+  if (NT_SUCCESS (status))
     {
       fmi.Mode &= ~FILE_SEQUENTIAL_ONLY;
       if (advice == POSIX_FADV_SEQUENTIAL)
@@ -1111,20 +1106,20 @@ fhandler_disk_file::fadvise (off_t offset, off_t length, int advice)
       __seterrno_from_nt_status (status);
     }
 
-  return -1;
+  return geterrno_from_nt_status (status);
 }
 
 int
 fhandler_disk_file::ftruncate (off_t length, bool allow_truncate)
 {
-  int res = -1;
+  int res = 0;
 
   if (length < 0 || !get_handle ())
-    set_errno (EINVAL);
+    res = EINVAL;
   else if (pc.isdir ())
-    set_errno (EISDIR);
+    res = EISDIR;
   else if (!(get_access () & GENERIC_WRITE))
-    set_errno (EBADF);
+    res = EBADF;
   else
     {
       NTSTATUS status;
@@ -1135,10 +1130,7 @@ fhandler_disk_file::ftruncate (off_t length, bool allow_truncate)
       status = NtQueryInformationFile (get_handle (), &io, &fsi, sizeof fsi,
 				       FileStandardInformation);
       if (!NT_SUCCESS (status))
-	{
-	  __seterrno_from_nt_status (status);
-	  return -1;
-	}
+	return geterrno_from_nt_status (status);
 
       /* If called through posix_fallocate, silently succeed if length
 	 is less than the file's actual length. */
@@ -1164,9 +1156,7 @@ fhandler_disk_file::ftruncate (off_t length, bool allow_truncate)
 				     &feofi, sizeof feofi,
 				     FileEndOfFileInformation);
       if (!NT_SUCCESS (status))
-	__seterrno_from_nt_status (status);
-      else
-	res = 0;
+	res = geterrno_from_nt_status (status);
     }
   return res;
 }
@@ -1247,15 +1237,41 @@ fhandler_disk_file::link (const char *newpath)
     {
       if (status == STATUS_INVALID_DEVICE_REQUEST
 	  || status == STATUS_NOT_SUPPORTED)
-	{
-	  /* FS doesn't support hard links.  Linux returns EPERM. */
-	  set_errno (EPERM);
-	  return -1;
-	}
+	/* FS doesn't support hard links.  Linux returns EPERM. */
+	set_errno (EPERM);
+      else
+	__seterrno_from_nt_status (status);
+      return -1;
+    }
+  else if (pc.file_attributes () & FILE_ATTRIBUTE_TEMPORARY)
+    {
+      /* If the original file has been opened with O_TMPFILE the file has
+	 FILE_ATTRIBUTE_TEMPORARY set.  After a successful hardlink the
+	 file is not temporary anymore in the usual sense.  So we remove
+	 FILE_ATTRIBUTE_TEMPORARY here, even if this makes the original file
+	 visible in directory enumeration. */
+      OBJECT_ATTRIBUTES attr;
+      status = NtOpenFile (&fh, FILE_WRITE_ATTRIBUTES,
+			   pc.init_reopen_attr (attr, fh), &io,
+			   FILE_SHARE_VALID_FLAGS, FILE_OPEN_FOR_BACKUP_INTENT);
+      if (!NT_SUCCESS (status))
+	debug_printf ("Opening for removing TEMPORARY attrib failed, "
+		      "status = %y", status);
       else
 	{
-	  __seterrno_from_nt_status (status);
-	  return -1;
+	  FILE_BASIC_INFORMATION fbi;
+
+	  fbi.CreationTime.QuadPart = fbi.LastAccessTime.QuadPart
+	  = fbi.LastWriteTime.QuadPart = fbi.ChangeTime.QuadPart = 0LL;
+	  fbi.FileAttributes = (pc.file_attributes ()
+				& ~FILE_ATTRIBUTE_TEMPORARY)
+			       ?: FILE_ATTRIBUTE_NORMAL;
+	  status = NtSetInformationFile (fh, &io, &fbi, sizeof fbi,
+					 FileBasicInformation);
+	  if (!NT_SUCCESS (status))
+	    debug_printf ("Removing the TEMPORARY attrib failed, status = %y",
+			  status);
+	  NtClose (fh);
 	}
     }
   return 0;
@@ -1539,7 +1555,9 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
 	goto non_atomic;
       status = NtReadFile (prw_handle, NULL, NULL, NULL, &io, buf, count,
 			   &off, NULL);
-      if (!NT_SUCCESS (status) && status != STATUS_END_OF_FILE)
+      if (status == STATUS_END_OF_FILE)
+	res = 0;
+      else if (!NT_SUCCESS (status))
 	{
 	  if (pc.isdir ())
 	    {
@@ -1549,14 +1567,20 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
 	  if (status == (NTSTATUS) STATUS_ACCESS_VIOLATION)
 	    {
 	      if (is_at_eof (prw_handle))
-		return 0;
+		{
+		  res = 0;
+		  goto out;
+		}
 	      switch (mmap_is_attached_or_noreserve (buf, count))
 		{
 		case MMAP_NORESERVE_COMMITED:
 		  status = NtReadFile (prw_handle, NULL, NULL, NULL, &io,
 				       buf, count, &off, NULL);
 		  if (NT_SUCCESS (status))
-		    return io.Information;
+		    {
+		      res = io.Information;
+		      goto out;
+		    }
 		  break;
 		case MMAP_RAISE_SIGBUS:
 		  raise (SIGBUS);
@@ -1567,7 +1591,8 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
 	  __seterrno_from_nt_status (status);
 	  return -1;
 	}
-      res = io.Information;	/* Valid on EOF. */
+      else
+	res = io.Information;
     }
   else
     {
@@ -1586,6 +1611,7 @@ non_atomic:
 	    res = -1;
 	}
     }
+out:
   debug_printf ("%d = pread(%p, %ld, %D)\n", res, buf, count, offset);
   return res;
 }
@@ -2064,12 +2090,14 @@ fhandler_disk_file::readdir (DIR *dir, dirent *de)
   PFILE_ID_BOTH_DIR_INFORMATION buf = NULL;
   PWCHAR FileName;
   ULONG FileNameLength;
-  ULONG FileAttributes = 0;
+  ULONG FileAttributes;
   IO_STATUS_BLOCK io;
   UNICODE_STRING fname;
 
   /* d_cachepos always refers to the next cache entry to use.  If it's 0
      we must reload the cache. */
+restart:
+  FileAttributes = 0;
   if (d_cachepos (dir) == 0)
     {
       if ((dir->__flags & dirent_get_d_ino))
@@ -2183,6 +2211,10 @@ go_ahead:
 	  FileAttributes =
 		((PFILE_BOTH_DIR_INFORMATION) buf)->FileAttributes;
 	}
+      /* We don't show O_TMPFILE files in the filesystem.  This is a kludge,
+	 so we may end up removing this snippet again. */
+      if (FileAttributes & FILE_ATTRIBUTE_TEMPORARY)
+	goto restart;
       RtlInitCountedUnicodeString (&fname, FileName, FileNameLength);
       d_mounts (dir)->check_mount (&fname);
       if (de->d_ino == 0 && (dir->__flags & dirent_set_d_ino))

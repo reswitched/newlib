@@ -28,28 +28,12 @@ INDEX
 INDEX
 	_ftello_r
 
-ANSI_SYNOPSIS
+SYNOPSIS
 	#include <stdio.h>
 	long ftell(FILE *<[fp]>);
 	off_t ftello(FILE *<[fp]>);
 	long _ftell_r(struct _reent *<[ptr]>, FILE *<[fp]>);
 	off_t _ftello_r(struct _reent *<[ptr]>, FILE *<[fp]>);
-
-TRAD_SYNOPSIS
-	#include <stdio.h>
-	long ftell(<[fp]>)
-	FILE *<[fp]>;
-
-	off_t ftello(<[fp]>)
-	FILE *<[fp]>;
-
-	long _ftell_r(<[ptr]>, <[fp]>)
-	struct _reent *<[ptr]>;
-	FILE *<[fp]>;
-
-	off_t _ftello_r(<[ptr]>, <[fp]>)
-	struct _reent *<[ptr]>;
-	FILE *<[fp]>;
 
 DESCRIPTION
 Objects of type <<FILE>> can have a ``position'' that records how much
@@ -115,24 +99,30 @@ _DEFUN(_ftello_r, (ptr, fp),
     {
       ptr->_errno = ESPIPE;
       _newlib_flockfile_exit (fp);
-      return -1L;
+      return (_off_t) -1;
     }
 
-  /* Find offset of underlying I/O object, then adjust for buffered
-     bytes.  Flush a write stream, since the offset may be altered if
-     the stream is appending.  Do not flush a read stream, since we
-     must not lose the ungetc buffer.  */
-  if (fp->_flags & __SWR)
-    _fflush_r (ptr, fp);
-  if (fp->_flags & __SOFF)
+  /* Find offset of underlying I/O object, then adjust for buffered bytes. */
+  if (!(fp->_flags & __SRD) && (fp->_flags & __SWR) &&
+      fp->_p != NULL && fp->_p - fp->_bf._base > 0 &&
+      (fp->_flags & __SAPP))
+    {
+      pos = fp->_seek (ptr, fp->_cookie, (_fpos_t) 0, SEEK_END);
+      if (pos == (_fpos_t) -1)
+	{
+          _newlib_flockfile_exit (fp);
+          return (_off_t) -1;
+	}
+    }
+  else if (fp->_flags & __SOFF)
     pos = fp->_offset;
   else
     {
       pos = fp->_seek (ptr, fp->_cookie, (_fpos_t) 0, SEEK_CUR);
-      if (pos == -1L)
+      if (pos == (_fpos_t) -1)
         {
           _newlib_flockfile_exit (fp);
-          return pos;
+          return (_off_t) -1;
         }
     }
   if (fp->_flags & __SRD)
@@ -157,7 +147,7 @@ _DEFUN(_ftello_r, (ptr, fp),
     }
 
   _newlib_flockfile_end (fp);
-  return pos;
+  return (_off_t) pos;
 }
 
 #ifndef _REENT_ONLY

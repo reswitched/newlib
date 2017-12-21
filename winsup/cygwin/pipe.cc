@@ -165,15 +165,13 @@ fhandler_pipe::lseek (off_t offset, int whence)
 int
 fhandler_pipe::fadvise (off_t offset, off_t length, int advice)
 {
-  set_errno (ESPIPE);
-  return -1;
+  return ESPIPE;
 }
 
 int
 fhandler_pipe::ftruncate (off_t length, bool allow_truncate)
 {
-  set_errno (allow_truncate ? EINVAL : ESPIPE);
-  return -1;
+  return allow_truncate ? EINVAL : ESPIPE;
 }
 
 char *

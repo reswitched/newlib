@@ -496,7 +496,7 @@ fhandler_socket::af_local_set_secret (char *buf)
 /* Maximum number of concurrently opened sockets from all Cygwin processes
    per session.  Note that shared sockets (through dup/fork/exec) are
    counted as one socket. */
-#define NUM_SOCKS       (32768 / sizeof (wsa_event))
+#define NUM_SOCKS       2048U
 
 #define LOCK_EVENTS	\
   if (wsock_mtx && \
@@ -623,7 +623,14 @@ fhandler_socket::init_events ()
       NtClose (wsock_mtx);
       return false;
     }
-  wsock_events = search_wsa_event_slot (new_serial_number);
+  if (!(wsock_events = search_wsa_event_slot (new_serial_number)))
+    {
+      set_errno (ENOBUFS);
+      NtClose (wsock_evt);
+      NtClose (wsock_mtx);
+      return false;
+    }
+
   /* sock type not yet set here. */
   if (pc.dev == FH_UDP || pc.dev == FH_DGRAM)
     wsock_events->events = FD_WRITE;
@@ -794,14 +801,16 @@ fhandler_socket::wait_for_events (const long event_mask, const DWORD flags)
 void
 fhandler_socket::release_events ()
 {
-  HANDLE evt = wsock_evt;
-  HANDLE mtx = wsock_mtx;
+  if (WaitForSingleObject (wsock_mtx, INFINITE) != WAIT_FAILED)
+    {
+      HANDLE evt = wsock_evt;
+      HANDLE mtx = wsock_mtx;
 
-  LOCK_EVENTS;
-  wsock_evt = wsock_mtx = NULL;
-  } ReleaseMutex (mtx);	/* == UNLOCK_EVENTS, but note using local mtx here. */
-  NtClose (evt);
-  NtClose (mtx);
+      wsock_evt = wsock_mtx = NULL;
+      ReleaseMutex (mtx);
+      NtClose (evt);
+      NtClose (mtx);
+    }
 }
 
 /* Called from net.cc:fdsock() if a freshly created socket is not

@@ -917,6 +917,13 @@ mmap64 (void *addr, size_t len, int prot, int flags, int fd, off_t off)
       goto out;
     }
 
+  /* POSIX: When MAP_FIXED is not set, the implementation uses addr in an
+     implementation-defined manner to arrive at pa [the return address].
+     Given that we refuse addr if it's not exactly at a page boundary, we
+     can just make sure addr does so indiscriminately.  Just round down
+     to the next lower page boundary. */
+  addr = (void *) rounddown ((uintptr_t) addr, pagesize);
+
   if (!anonymous (flags) && fd != -1)
     {
       /* Ensure that fd is open */
@@ -1065,7 +1072,7 @@ mmap64 (void *addr, size_t len, int prot, int flags, int fd, off_t off)
 	 Note that this isn't done in 64 bit environments since apparently
 	 64 bit systems don't support the AT_ROUND_TO_PAGE flag, which is
 	 required to get this right.  Too bad. */
-#ifndef __x86_64__
+#ifdef __i386__
       if (!wincap.is_wow64 ()
 	  && (((off_t) len > fsiz && !autogrow (flags))
 	      || roundup2 (len, wincap.page_size ())
@@ -1170,12 +1177,9 @@ go_ahead:
 	 protection as the file's pages, then as much pages as necessary
 	 to accomodate the requested length, but as reserved pages which
 	 raise a SIGBUS when trying to access them.  AT_ROUND_TO_PAGE
-	 and page protection on shared pages is only supported by 32 bit NT,
-	 so don't even try on WOW64.  This is accomplished by not setting
-	 orig_len on WOW64 above. */
-#if 0
-      orig_len = roundup2 (orig_len, pagesize);
-#endif
+	 and page protection on shared pages is only supported by the
+	 32 bit environment, so don't even try on 64 bit or even WOW64.
+	 This is accomplished by not setting orig_len on 64 bit above. */
       len = roundup2 (len, wincap.page_size ());
       if (orig_len - len)
 	{
@@ -1228,14 +1232,14 @@ out:
   return ret;
 }
 
-#ifdef __x86_64__
-EXPORT_ALIAS (mmap64, mmap)
-#else
+#ifdef __i386__
 extern "C" void *
 mmap (void *addr, size_t len, int prot, int flags, int fd, _off_t off)
 {
   return mmap64 (addr, len, prot, flags, fd, (off_t)off);
 }
+#else
+EXPORT_ALIAS (mmap64, mmap)
 #endif
 
 /* munmap () removes all mmapped pages between addr and addr+len. */
@@ -1458,7 +1462,7 @@ mlock (const void *addr, size_t len)
 
   /* Align address and length values to page size. */
   size_t pagesize = wincap.allocation_granularity ();
-  PVOID base = (PVOID) rounddown((uintptr_t) addr, pagesize);
+  PVOID base = (PVOID) rounddown ((uintptr_t) addr, pagesize);
   SIZE_T size = roundup2 (((uintptr_t) addr - (uintptr_t) base) + len,
 			  pagesize);
   NTSTATUS status = 0;
@@ -1516,7 +1520,7 @@ munlock (const void *addr, size_t len)
 
   /* Align address and length values to page size. */
   size_t pagesize = wincap.allocation_granularity ();
-  PVOID base = (PVOID) rounddown((uintptr_t) addr, pagesize);
+  PVOID base = (PVOID) rounddown ((uintptr_t) addr, pagesize);
   SIZE_T size = roundup2 (((uintptr_t) addr - (uintptr_t) base) + len,
 			  pagesize);
   NTSTATUS status = NtUnlockVirtualMemory (NtCurrentProcess (), &base, &size,

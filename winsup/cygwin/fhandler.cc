@@ -137,6 +137,11 @@ fhandler_base::set_name (path_conv &in_pc)
 
 char *fhandler_base::get_proc_fd_name (char *buf)
 {
+  /* If the file had been opened with O_TMPFILE | O_EXCL, don't
+     expose the filename.  linkat is supposed to return ENOENT in this
+     case.  See man 2 open on Linux. */
+  if ((get_flags () & (O_TMPFILE | O_EXCL)) == (O_TMPFILE | O_EXCL))
+    return strcpy (buf, "");
   if (get_name ())
     return strcpy (buf, get_name ());
   if (dev ().name ())
@@ -582,7 +587,7 @@ fhandler_base::open (int flags, mode_t mode)
 
   /* Don't use the FILE_OVERWRITE{_IF} flags here.  See below for an
      explanation, why that's not such a good idea. */
-  if ((flags & O_EXCL) && (flags & O_CREAT))
+  if (((flags & O_EXCL) && (flags & O_CREAT)) || (flags & O_TMPFILE))
     create_disposition = FILE_CREATE;
   else
     create_disposition = (flags & O_CREAT) ? FILE_OPEN_IF : FILE_OPEN;
@@ -593,6 +598,18 @@ fhandler_base::open (int flags, mode_t mode)
 	 target, not the symlink.  This would break lstat. */
       if (pc.is_rep_symlink ())
 	options |= FILE_OPEN_REPARSE_POINT;
+
+      /* O_TMPFILE files are created with delete-on-close semantics, as well
+	 as with FILE_ATTRIBUTE_TEMPORARY.  The latter speeds up file access,
+	 because the OS tries to keep the file in memory as much as possible.
+	 In conjunction with FILE_DELETE_ON_CLOSE, ideally the OS never has
+	 to write to the disk at all. */
+      if (flags & O_TMPFILE)
+	{
+	  access |= DELETE;
+	  file_attributes |= FILE_ATTRIBUTE_TEMPORARY;
+	  options |= FILE_DELETE_ON_CLOSE;
+	}
 
       if (pc.fs_is_nfs ())
 	{
@@ -609,15 +626,7 @@ fhandler_base::open (int flags, mode_t mode)
 	    }
 	}
 
-      /* Trying to overwrite an already existing file with FILE_ATTRIBUTE_HIDDEN
-	 and/or FILE_ATTRIBUTE_SYSTEM attribute set, NtCreateFile fails with
-	 STATUS_ACCESS_DENIED.  Per MSDN you have to create the file with the
-	 same attributes as already specified for the file. */
-      if (create_disposition == FILE_CREATE
-	  && has_attribute (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))
-	file_attributes |= pc.file_attributes ();
-
-      if (flags & O_CREAT)
+      if (flags & (O_CREAT | O_TMPFILE))
 	{
 	  file_attributes |= FILE_ATTRIBUTE_NORMAL;
 
@@ -1771,8 +1780,7 @@ fhandler_base::fadvise (off_t offset, off_t length, int advice)
 int
 fhandler_base::ftruncate (off_t length, bool allow_truncate)
 {
-  set_errno (EINVAL);
-  return -1;
+  return EINVAL;
 }
 
 int
