@@ -1,7 +1,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <libtransistor/nx.h>
-#include "fd.h"
+#include <sys/fd.h>
 
 #define FD_MAX 1024
 #define IS_VALID(fd) ((fd) >= 0 && (fd) < FD_MAX)

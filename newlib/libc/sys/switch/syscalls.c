@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include<libtransistor/context.h>
-#include "fd.h"
+#include<sys/fd.h>
 
 void _exit(); // implemented in libtransistor crt0
 

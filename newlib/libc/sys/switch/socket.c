@@ -2,7 +2,7 @@
 #include <libtransistor/nx.h>
 #include <stdlib.h>
 #include <errno.h>
-#include "fd.h"
+#include <sys/fd.h>
 
 static struct file_operations socket_fops;
 
