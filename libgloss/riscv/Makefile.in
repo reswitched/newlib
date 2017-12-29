@@ -6,7 +6,42 @@ gloss_hdrs = \
 	machine/syscall.h \
 
 gloss_srcs = \
-	syscalls.c \
+	nanosleep.c \
+	sys_access.c \
+	sys_chdir.c \
+	sys_chmod.c \
+	sys_chown.c \
+	sys_close.c \
+	sys_conv_stat.c \
+	sys_execve.c \
+	sys_exit.c \
+	sys_faccessat.c \
+	sys_fork.c \
+	sys_fstatat.c \
+	sys_fstat.c \
+	sys_ftime.c \
+	sys_getcwd.c \
+	sys_getpid.c \
+	sys_gettimeofday.c \
+	sys_isatty.c \
+	sys_kill.c \
+	sys_link.c \
+	sys_lseek.c \
+	sys_lstat.c \
+	sys_openat.c \
+	sys_open.c \
+	sys_read.c \
+	sys_sbrk.c \
+	sys_stat.c \
+	sys_sysconf.c \
+	sys_times.c \
+	sys_unlink.c \
+	sys_utime.c \
+	sys_wait.c \
+	sys_write.c 
+
+gloss_specs = \
+	nano.specs sim.specs
 
 # Extra files
 
@@ -85,9 +120,19 @@ gloss_c_deps = $(patsubst %.c, %.d, $(notdir $(gloss_c_srcs)))
 $(gloss_c_objs) : %.o : %.c
 	$(COMPILE) -c $<
 
-objs += $(gloss_c_objs)
+gloss_objs += $(gloss_c_objs)
 deps += $(gloss_c_deps)
 junk += $(gloss_c_deps) $(gloss_c_objs)
+
+sim_c_objs = $(patsubst %.c, sim-%.o, $(notdir $(gloss_c_srcs)))
+sim_c_deps = $(patsubst %.c, sim-%.d, $(notdir $(gloss_c_srcs)))
+
+$(sim_c_objs): sim-%.o : %.c
+	$(COMPILE) -c -DUSING_SIM_SPECS -o $@ $<
+
+sim_objs += $(sim_c_objs)
+deps += $(sim_c_deps)
+junk += $(sim_c_deps) $(sim_c_objs)
 
 #-------------------------------------------------------------------------
 # Build Object Files from Assembly Source
@@ -98,25 +143,49 @@ gloss_asm_objs = $(patsubst %.S, %.o, $(notdir $(gloss_asm_srcs)))
 gloss_asm_deps = $(patsubst %.S, %.d, $(notdir $(gloss_asm_srcs)))
 
 $(gloss_asm_objs) : %.o : %.S
-	$(COMPILE) -c $<
+	$(COMPILE) -c -o $@ $<
 
-objs += $(gloss_asm_objs)
+gloss_objs += $(gloss_asm_objs)
 deps += $(gloss_asm_deps)
 junk += $(gloss_asm_deps) $(gloss_asm_objs)
+
+sim_asm_objs = $(patsubst %.S, sim-%.o, $(notdir $(gloss_asm_srcs)))
+sim_asm_deps = $(patsubst %.S, sim-%.d, $(notdir $(gloss_asm_srcs)))
+
+$(sim_asm_objs) : sim-%.o : %.S
+	$(COMPILE) -c -DUSING_SIM_SPECS -o $@ $<
+
+sim_objs += $(sim_asm_objs)
+deps += $(sim_asm_deps)
+junk += $(sim_asm_deps) $(sim_asm_objs)
 
 #-------------------------------------------------------------------------
 # Build libgloss.a
 #-------------------------------------------------------------------------
 
 gloss_lib  = libgloss.a
-$(gloss_lib) : $(objs)
+$(gloss_lib) : $(gloss_objs)
 	$(AR) rcv $@ $^
 	$(RANLIB) $@
 
-junk += $(gloss_libs)
+junk += $(gloss_lib)
 
 install_hdrs += $(gloss_hdrs)
 install_libs += $(gloss_lib)
+install_specs += $(gloss_specs)
+
+#-------------------------------------------------------------------------
+# Build libsim.a
+#-------------------------------------------------------------------------
+
+sim_lib  = libsim.a
+$(sim_lib) : $(sim_objs)
+	$(AR) rcv $@ $^
+	$(RANLIB) $@
+
+junk += $(sim_lib)
+
+install_libs += $(sim_lib)
 
 #-------------------------------------------------------------------------
 # Build crt0.o
@@ -159,7 +228,13 @@ install-libs : $(install_libs)
 		$(INSTALL_DATA) $$file $(install_libs_dir)/$$file; \
 	done
 
-install : install-hdrs install-libs 
+install-specs : $(install_specs)
+	test -d $(install_libs_dir) || mkdir -p $(install_libs_dir)
+	for file in $^; do \
+		$(INSTALL_DATA) $$file $(install_libs_dir)/; \
+	done
+
+install : install-hdrs install-libs install-specs
 .PHONY : install install-hdrs install-libs
 
 #-------------------------------------------------------------------------
