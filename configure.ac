@@ -2599,7 +2599,7 @@ esac
 
 # Some systems (e.g., one of the i386-aix systems the gas testers are
 # using) don't handle "\$" correctly, so don't use it here.
-tooldir='${exec_prefix}'/${target_noncanonical}
+tooldir='${exec_prefix}'#/${target_noncanonical}
 build_tooldir=${tooldir}
 
 # Create a .gdbinit file which runs the one in srcdir
