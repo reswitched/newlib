@@ -242,6 +242,10 @@
 #define _REENT_GLOBAL_STDIO_STREAMS
 #endif
 
+#if defined(__SWITCH__)
+#define __DYNAMIC_REENT__
+#endif
+
 #ifndef __EXPORT
 #define __EXPORT
 #endif
