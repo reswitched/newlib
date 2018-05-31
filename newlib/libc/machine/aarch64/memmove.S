@@ -97,7 +97,7 @@ def_fn memmove, 6
 	sub	tmp1, dstin, src
 	cmp	count, 96
 	ccmp	tmp1, count, 2, hi
-	b.hs	memcpy
+	b.hs	memcpy_helper
 
 	cbz	tmp1, 3f
 	add	dstend, dstin, count
@@ -150,6 +150,8 @@ def_fn memmove, 6
 	stp	B_l, B_h, [dstin, 16]
 	stp	C_l, C_h, [dstin]
 3:	ret
-
+memcpy_helper:
+	b memcpy
+	
 	.size	memmove, . - memmove
 #endif
