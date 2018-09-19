@@ -58,11 +58,10 @@ No supporting OS subroutines are required.
 #include <wchar.h>
 
 wchar_t *
-_DEFUN (wcschr, (s, c),
-	_CONST wchar_t * s _AND
+wcschr (const wchar_t * s,
 	wchar_t c)
 {
-  _CONST wchar_t *p;
+  const wchar_t *p;
 
   p = s;
   do

@@ -206,13 +206,11 @@ void __stdcall to_timestruc_t (PLARGE_INTEGER, timestruc_t *);
 void __stdcall time_as_timestruc_t (timestruc_t *);
 void __stdcall timeval_to_filetime (const struct timeval *, PLARGE_INTEGER);
 void __stdcall timespec_to_filetime (const struct timespec *, PLARGE_INTEGER);
+bool timeval_to_ms (const struct timeval *, DWORD &);
 
 /* Console related */
 void __stdcall set_console_title (char *);
 void init_console_handler (bool);
-
-void __reg2 __set_winsock_errno (const char *fn, int ln);
-#define set_winsock_errno() __set_winsock_errno (__FUNCTION__, __LINE__)
 
 extern bool wsock_started;
 
@@ -225,8 +223,6 @@ int __small_swprintf (PWCHAR dst, const WCHAR *fmt, ...);
 int __small_vswprintf (PWCHAR dst, const WCHAR *fmt, va_list ap);
 void multiple_cygwin_problem (const char *, uintptr_t, uintptr_t);
 
-extern "C" void vklog (int priority, const char *message, va_list ap);
-extern "C" void klog (int priority, const char *message, ...);
 bool child_copy (HANDLE, bool, ...);
 
 class path_conv;

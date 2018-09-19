@@ -47,17 +47,15 @@ No supporting OS subroutines are required.
 
 #ifndef _REENT_ONLY
 int
-_DEFUN (atoi, (s),
-	_CONST char *s)
+atoi (const char *s)
 {
   return (int) strtol (s, NULL, 10);
 }
 #endif /* !_REENT_ONLY */
 
 int
-_DEFUN (_atoi_r, (s),
-	struct _reent *ptr _AND
-	_CONST char *s)
+_atoi_r (struct _reent *ptr,
+	const char *s)
 {
   return (int) _strtol_r (ptr, s, NULL, 10);
 }

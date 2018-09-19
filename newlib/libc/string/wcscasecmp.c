@@ -36,9 +36,8 @@ QUICKREF
 #include <wctype.h>
 
 int
-_DEFUN (wcscasecmp, (s1, s2),
-	_CONST wchar_t *s1 _AND
-	_CONST wchar_t *s2)
+wcscasecmp (const wchar_t *s1,
+	const wchar_t *s2)
 {
   int d = 0;
   for ( ; ; )

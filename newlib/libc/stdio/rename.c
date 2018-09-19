@@ -54,9 +54,8 @@ Supporting OS subroutines required: <<link>>, <<unlink>>, or <<rename>>.
 #ifndef _REENT_ONLY
 
 int
-_DEFUN(rename, (old, new),
-       _CONST char *old _AND
-       _CONST char *new)
+rename (const char *old,
+       const char *new)
 {
   return _rename_r (_REENT, old, new);
 }

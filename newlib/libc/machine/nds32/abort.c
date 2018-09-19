@@ -28,8 +28,8 @@ Supporting OS subroutines required: <<_exit>>.
 
 #include <unistd.h>
 
-_VOID
-_DEFUN_VOID (abort)
+void
+abort (void)
 {
   while (1)
     {

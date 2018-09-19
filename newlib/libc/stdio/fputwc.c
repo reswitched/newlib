@@ -128,9 +128,8 @@ PORTABILITY
 #include "local.h"
 
 wint_t
-_DEFUN(__fputwc, (ptr, wc, fp),
-	struct _reent *ptr _AND
-	wchar_t wc _AND
+__fputwc (struct _reent *ptr,
+	wchar_t wc,
 	FILE *fp)
 {
   char buf[MB_LEN_MAX];
@@ -163,9 +162,8 @@ _DEFUN(__fputwc, (ptr, wc, fp),
 }
 
 wint_t
-_DEFUN(_fputwc_r, (ptr, wc, fp),
-	struct _reent *ptr _AND
-	wchar_t wc _AND
+_fputwc_r (struct _reent *ptr,
+	wchar_t wc,
 	FILE *fp)
 {
   wint_t r;
@@ -178,8 +176,7 @@ _DEFUN(_fputwc_r, (ptr, wc, fp),
 }
 
 wint_t
-_DEFUN(fputwc, (wc, fp),
-	wchar_t wc _AND
+fputwc (wchar_t wc,
 	FILE *fp)
 {
   struct _reent *reent = _REENT;

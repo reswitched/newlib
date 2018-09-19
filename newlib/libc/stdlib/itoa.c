@@ -30,9 +30,8 @@ No supporting OS subroutine calls are required.
 #include <stdlib.h>
 
 char *
-_DEFUN (__itoa, (value, str, base),
-        int value _AND
-        char *str _AND 
+__itoa (int value,
+        char *str,
         int base)
 {
   unsigned uvalue;
@@ -60,9 +59,8 @@ _DEFUN (__itoa, (value, str, base),
 }
 
 char *  
-_DEFUN (itoa, (value, str, base),
-        int value _AND
-        char *str _AND
+itoa (int value,
+        char *str,
         int base)
 {
   return __itoa (value, str, base);

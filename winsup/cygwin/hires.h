@@ -29,8 +29,14 @@ details. */
 
 /* 100ns difference between Windows and UNIX timebase. */
 #define FACTOR (0x19db1ded53e8000LL)
+/* # of nanosecs per second. */
+#define NSPERSEC (1000000000LL)
 /* # of 100ns intervals per second. */
-#define NSPERSEC 10000000LL
+#define NS100PERSEC (10000000LL)
+/* # of microsecs per second. */
+#define USPERSEC (1000000LL)
+/* # of millisecs per second. */
+#define MSPERSEC (1000L)
 
 class hires_base
 {
@@ -61,4 +67,5 @@ class hires_ms : public hires_base
 };
 
 extern hires_ms gtod;
+extern hires_ns ntod;
 #endif /*__HIRES_H__*/

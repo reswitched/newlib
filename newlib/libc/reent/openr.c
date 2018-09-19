@@ -39,10 +39,9 @@ DESCRIPTION
 */
 
 int
-_DEFUN (_open_r, (ptr, file, flags, mode),
-     struct _reent *ptr _AND
-     _CONST char *file _AND
-     int flags _AND
+_open_r (struct _reent *ptr,
+     const char *file,
+     int flags,
      int mode)
 {
   int ret;

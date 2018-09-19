@@ -45,9 +45,8 @@ DESCRIPTION
 */
 
 int
-_DEFUN (_stat_r, (ptr, file, pstat),
-     struct _reent *ptr _AND
-     _CONST char *file _AND
+_stat_r (struct _reent *ptr,
+     const char *file,
      struct stat *pstat)
 {
   int ret;

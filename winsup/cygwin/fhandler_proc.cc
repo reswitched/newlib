@@ -535,9 +535,9 @@ format_proc_stat (void *, char *&destbuf)
       for (unsigned long i = 0; i < wincap.cpu_count (); i++)
 	{
 	  kernel_time += (spt[i].KernelTime.QuadPart - spt[i].IdleTime.QuadPart)
-			 * HZ / 10000000ULL;
-	  user_time += spt[i].UserTime.QuadPart * HZ / 10000000ULL;
-	  idle_time += spt[i].IdleTime.QuadPart * HZ / 10000000ULL;
+			 * CLOCKS_PER_SEC / NS100PERSEC;
+	  user_time += spt[i].UserTime.QuadPart * CLOCKS_PER_SEC / NS100PERSEC;
+	  idle_time += spt[i].IdleTime.QuadPart * CLOCKS_PER_SEC / NS100PERSEC;
 	}
 
       eobuf += __small_sprintf (eobuf, "cpu %U %U %U %U\n",
@@ -546,9 +546,10 @@ format_proc_stat (void *, char *&destbuf)
       for (unsigned long i = 0; i < wincap.cpu_count (); i++)
 	{
 	  interrupt_count += spt[i].InterruptCount;
-	  kernel_time = (spt[i].KernelTime.QuadPart - spt[i].IdleTime.QuadPart) * HZ / 10000000ULL;
-	  user_time = spt[i].UserTime.QuadPart * HZ / 10000000ULL;
-	  idle_time = spt[i].IdleTime.QuadPart * HZ / 10000000ULL;
+	  kernel_time = (spt[i].KernelTime.QuadPart - spt[i].IdleTime.QuadPart)
+			* CLOCKS_PER_SEC / NS100PERSEC;
+	  user_time = spt[i].UserTime.QuadPart * CLOCKS_PER_SEC / NS100PERSEC;
+	  idle_time = spt[i].IdleTime.QuadPart * CLOCKS_PER_SEC / NS100PERSEC;
 	  eobuf += __small_sprintf (eobuf, "cpu%d %U %U %U %U\n", i,
 				    user_time, 0ULL, kernel_time, idle_time);
 	}
@@ -599,7 +600,6 @@ format_proc_stat (void *, char *&destbuf)
   return eobuf - buf;
 }
 
-#define add_size(p,s) ((p) = ((__typeof__(p))((PBYTE)(p)+(s))))
 #define print(x) { bufptr = stpcpy (bufptr, (x)); }
 
 static inline uint32_t
@@ -638,31 +638,8 @@ format_proc_cpuinfo (void *, char *&destbuf)
   char *buf = tp.c_get ();
   char *bufptr = buf;
 
-  DWORD lpi_size = NT_MAX_PATH;
   //WORD num_cpu_groups = 1;	/* Pre Windows 7, only one group... */
-  WORD num_cpu_per_group = 64;	/* ...and a max of 64 CPUs. */
-
-  if (wincap.has_processor_groups ())
-    {
-      PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX lpi =
-		(PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX) tp.c_get ();
-      lpi_size = NT_MAX_PATH;
-      if (!GetLogicalProcessorInformationEx (RelationGroup, lpi, &lpi_size))
-	lpi = NULL;
-      else
-	{
-	  PSYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX plpi = lpi;
-	  for (DWORD size = lpi_size; size > 0;
-	       size -= plpi->Size, add_size (plpi, plpi->Size))
-	    if (plpi->Relationship == RelationGroup)
-	      {
-		//num_cpu_groups = plpi->Group.MaximumGroupCount;
-		num_cpu_per_group
-			= plpi->Group.GroupInfo[0].MaximumProcessorCount;
-		break;
-	      }
-	}
-    }
+  WORD num_cpu_per_group = __get_cpus_per_group ();
 
   cpu_num_p = wcpcpy (cpu_key, L"\\Registry\\Machine\\HARDWARE\\DESCRIPTION"
 				"\\System\\CentralProcessor\\");
@@ -767,8 +744,9 @@ format_proc_cpuinfo (void *, char *&destbuf)
 	  extern long get_cpu_cache_intel (int sysc, uint32_t maxf);
 	  long cs;
 
-	  /* As on Linux, don't check for L3 cache. */
-	  cs = get_cpu_cache_intel (_SC_LEVEL2_CACHE_SIZE, maxf);
+	  cs = get_cpu_cache_intel (_SC_LEVEL3_CACHE_SIZE, maxf);
+	  if (cs == -1)
+	    cs = get_cpu_cache_intel (_SC_LEVEL2_CACHE_SIZE, maxf);
 	  if (cs == -1)
 	    {
 	      cs = get_cpu_cache_intel (_SC_LEVEL1_ICACHE_SIZE, maxf);

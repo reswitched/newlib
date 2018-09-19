@@ -106,7 +106,7 @@ fhandler_pty_common::__acquire_output_mutex (const char *fn, int ln,
 #else
       ostack[osi].fn = fn;
       ostack[osi].ln = ln;
-      ostack[osi].tname = cygthread::name ();
+      ostack[osi].tname = mythreadname ();
       termios_printf ("acquired for %s:%d, osi %d", fn, ln, osi);
       osi++;
 #endif
@@ -859,7 +859,7 @@ fhandler_pty_slave::read (void *ptr, size_t& len)
 	break;
     }
 out:
-  termios_printf ("%d=read(%p, %lu)", totalread, ptr, len);
+  termios_printf ("%d = read(%p, %lu)", totalread, ptr, len);
   len = (size_t) totalread;
 }
 

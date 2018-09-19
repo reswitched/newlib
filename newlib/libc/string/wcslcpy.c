@@ -62,13 +62,12 @@ No supporting OS subroutines are required.
  * Returns wcslen(src); if retval >= siz, truncation occurred.
  */
 size_t
-_DEFUN (wcslcpy, (dst, src, siz),
-	wchar_t * dst _AND
-	_CONST wchar_t * src _AND
+wcslcpy (wchar_t * dst,
+	const wchar_t * src,
 	size_t siz)
 {
   wchar_t *d = dst;
-  _CONST wchar_t *s = src;
+  const wchar_t *s = src;
   size_t n = siz;
 
   /* Copy as many bytes as will fit */

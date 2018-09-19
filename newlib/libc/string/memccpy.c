@@ -55,16 +55,15 @@ PORTABILITY
 #endif
 
 
-_PTR
-_DEFUN (memccpy, (dst0, src0, endchar, len0),
-	_PTR __restrict dst0 _AND
-	_CONST _PTR __restrict src0 _AND
-	int endchar0 _AND
+void *
+memccpy (void *__restrict dst0,
+	const void *__restrict src0,
+	int endchar0,
 	size_t len0)
 {
 
 #if defined(PREFER_SIZE_OVER_SPEED) || defined(__OPTIMIZE_SIZE__)
-  _PTR ptr = NULL;
+  void *ptr = NULL;
   char *dst = (char *) dst0;
   char *src = (char *) src0;
   char endchar = endchar0 & 0xff;
@@ -80,11 +79,11 @@ _DEFUN (memccpy, (dst0, src0, endchar, len0),
 
   return ptr;
 #else
-  _PTR ptr = NULL;
+  void *ptr = NULL;
   char *dst = dst0;
-  _CONST char *src = src0;
+  const char *src = src0;
   long *aligned_dst;
-  _CONST long *aligned_src;
+  const long *aligned_src;
   char endchar = endchar0 & 0xff;
 
   /* If the size is small, or either SRC or DST is unaligned,

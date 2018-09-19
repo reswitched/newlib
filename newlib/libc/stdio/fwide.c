@@ -48,9 +48,8 @@ C99, POSIX.1-2001.
 #include "local.h"
 
 int
-_DEFUN(_fwide_r, (ptr, fp, mode),
-	struct _reent *ptr _AND
-	FILE *fp _AND
+_fwide_r (struct _reent *ptr,
+	FILE *fp,
 	int mode)
 {
   int ret;
@@ -70,8 +69,7 @@ _DEFUN(_fwide_r, (ptr, fp, mode),
 }
 
 int
-_DEFUN(fwide, (fp, mode),
-	FILE *fp _AND
+fwide (FILE *fp,
 	int mode)
 {
   return _fwide_r (_REENT, fp, mode);

@@ -8,18 +8,20 @@
 
 #pragma once
 
-#include <ntstatus.h>
+#include <w32api/ntstatus.h>
+
+/* Values for Cygwin AF_UNIX socket reparse points. */
+#define IO_REPARSE_TAG_CYGUNIX	(0x00006375)
+extern GUID __cygwin_socket_guid;
+#define CYGWIN_SOCKET_GUID (&__cygwin_socket_guid)
 
 /* custom status code: */
 #define STATUS_ILLEGAL_DLL_PSEUDO_RELOCATION ((NTSTATUS) 0xe0000269)
 
-/* As of March 2013, Mingw doesn't define these status codes yet. */
-#ifndef STATUS_NETWORK_OPEN_RESTRICTION
-#define STATUS_NETWORK_OPEN_RESTRICTION ((NTSTATUS)0xC0000201)
-#endif
-#ifndef STATUS_SYMLINK_CLASS_DISABLED
-#define STATUS_SYMLINK_CLASS_DISABLED ((NTSTATUS)0xC0000715)
-#endif
+/* Simplify checking for a transactional error code. */
+#define NT_TRANSACTIONAL_ERROR(s)	\
+		(((ULONG)(s) >= (ULONG)STATUS_TRANSACTIONAL_CONFLICT) \
+		 && ((ULONG)(s) <= (ULONG)STATUS_TRANSACTION_NOT_ENLISTED))
 
 #define NtCurrentProcess() ((HANDLE) (LONG_PTR) -1)
 #define NtCurrentThread()  ((HANDLE) (LONG_PTR) -2)
@@ -64,6 +66,7 @@
 
 /* Symbolic link access rights (only in NT namespace). */
 #define SYMBOLIC_LINK_QUERY 1
+#define SYMBOLIC_LINK_ALL_ACCESS (STANDARD_RIGHTS_REQUIRED | 0x1)
 
 /* Transaction access rights. */
 #ifndef TRANSACTION_ALL_ACCESS
@@ -154,8 +157,19 @@
 #define FILE_VC_VALID_MASK              0x000003ff
 
 /* IOCTL code to impersonate client of named pipe. */
-#define FSCTL_PIPE_IMPERSONATE CTL_CODE(FILE_DEVICE_NAMED_PIPE, 7, \
+
+#define FSCTL_PIPE_DISCONNECT	CTL_CODE(FILE_DEVICE_NAMED_PIPE, 1, \
+					 METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_PIPE_LISTEN	CTL_CODE(FILE_DEVICE_NAMED_PIPE, 2, \
 					METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_PIPE_PEEK		CTL_CODE(FILE_DEVICE_NAMED_PIPE, 3, \
+					 METHOD_BUFFERED, FILE_READ_DATA)
+#define FSCTL_PIPE_WAIT		CTL_CODE(FILE_DEVICE_NAMED_PIPE, 6, \
+					 METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_PIPE_IMPERSONATE	CTL_CODE(FILE_DEVICE_NAMED_PIPE, 7, \
+					 METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define FSCTL_PIPE_FLUSH	CTL_CODE(FILE_DEVICE_NAMED_PIPE, 16, \
+					 METHOD_BUFFERED, FILE_WRITE_DATA)
 
 typedef enum _FILE_INFORMATION_CLASS
 {
@@ -940,11 +954,49 @@ typedef struct _FILE_ALL_INFORMATION {
 
 enum
 {
+  FILE_PIPE_QUEUE_OPERATION = 0,
+  FILE_PIPE_COMPLETE_OPERATION = 1
+};
+
+enum
+{
+  FILE_PIPE_BYTE_STREAM_MODE = 0,
+  FILE_PIPE_MESSAGE_MODE = 1
+};
+
+enum
+{
   FILE_PIPE_DISCONNECTED_STATE = 1,
   FILE_PIPE_LISTENING_STATE = 2,
   FILE_PIPE_CONNECTED_STATE = 3,
   FILE_PIPE_CLOSING_STATE = 4
 };
+
+enum
+{
+  FILE_PIPE_INBOUND = 0,
+  FILE_PIPE_OUTBOUND = 1,
+  FILE_PIPE_FULL_DUPLEX = 2
+};
+
+enum
+{
+  FILE_PIPE_CLIENT_END = 0,
+  FILE_PIPE_SERVER_END = 1
+};
+
+enum
+{
+  FILE_PIPE_BYTE_STREAM_TYPE = 0,
+  FILE_PIPE_MESSAGE_TYPE = 1
+};
+
+/* Checked on 64 bit. */
+typedef struct _FILE_PIPE_INFORMATION
+{
+  ULONG ReadMode;
+  ULONG CompletionMode;
+} FILE_PIPE_INFORMATION, *PFILE_PIPE_INFORMATION;
 
 /* Checked on 64 bit. */
 typedef struct _FILE_PIPE_LOCAL_INFORMATION
@@ -960,6 +1012,23 @@ typedef struct _FILE_PIPE_LOCAL_INFORMATION
   ULONG NamedPipeState;
   ULONG NamedPipeEnd;
 } FILE_PIPE_LOCAL_INFORMATION, *PFILE_PIPE_LOCAL_INFORMATION;
+
+/* Checked on 64 bit. */
+typedef struct _FILE_PIPE_PEEK_BUFFER {
+  ULONG NamedPipeState;
+  ULONG ReadDataAvailable;
+  ULONG NumberOfMessages;
+  ULONG MessageLength;
+  CHAR Data[1];
+} FILE_PIPE_PEEK_BUFFER, *PFILE_PIPE_PEEK_BUFFER;
+
+/* Checked on 64 bit. */
+typedef struct _FILE_PIPE_WAIT_FOR_BUFFER {
+  LARGE_INTEGER Timeout;
+  ULONG NameLength;
+  BOOLEAN TimeoutSpecified;
+  WCHAR Name[1];
+} FILE_PIPE_WAIT_FOR_BUFFER, *PFILE_PIPE_WAIT_FOR_BUFFER;
 
 /* Checked on 64 bit. */
 typedef struct _FILE_COMPRESSION_INFORMATION
@@ -1272,10 +1341,18 @@ extern "C"
 				      PLARGE_INTEGER);
   NTSTATUS NTAPI NtCreateMutant (PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
 				 BOOLEAN);
+  NTSTATUS NTAPI NtCreateNamedPipeFile (PHANDLE, ACCESS_MASK,
+					POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK,
+					ULONG, ULONG, ULONG, ULONG, ULONG,
+					ULONG, ULONG, ULONG, ULONG,
+					PLARGE_INTEGER);
   NTSTATUS NTAPI NtCreateSection (PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
 				  PLARGE_INTEGER, ULONG, ULONG, HANDLE);
   NTSTATUS NTAPI NtCreateSemaphore (PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
 				    LONG, LONG);
+  NTSTATUS NTAPI NtCreateSymbolicLinkObject (PHANDLE, ACCESS_MASK,
+					     POBJECT_ATTRIBUTES,
+					     PUNICODE_STRING);
   NTSTATUS NTAPI NtCreateTimer (PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
 				TIMER_TYPE);
   NTSTATUS NTAPI NtCreateToken (PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES,
@@ -1391,6 +1468,7 @@ extern "C"
 			       PLARGE_INTEGER, ULONG);
   NTSTATUS NTAPI NtUnlockVirtualMemory (HANDLE, PVOID *, PSIZE_T, ULONG);
   NTSTATUS NTAPI NtUnmapViewOfSection (HANDLE, PVOID);
+  NTSTATUS NTAPI NtWaitForSingleObject (HANDLE, BOOLEAN, PLARGE_INTEGER);
   NTSTATUS NTAPI NtWriteFile (HANDLE, HANDLE, PIO_APC_ROUTINE, PVOID,
 			      PIO_STATUS_BLOCK, PVOID, ULONG, PLARGE_INTEGER,
 			      PULONG);
@@ -1454,7 +1532,6 @@ extern "C"
 						PBOOLEAN);
   NTSTATUS NTAPI RtlGetVersion (PRTL_OSVERSIONINFOEXW);
   PSID_IDENTIFIER_AUTHORITY NTAPI RtlIdentifierAuthoritySid (PSID);
-  VOID NTAPI RtlInitEmptyUnicodeString (PUNICODE_STRING, PCWSTR, USHORT);
   VOID NTAPI RtlInitAnsiString (PANSI_STRING, PCSTR);
   NTSTATUS NTAPI RtlInitializeSid (PSID, PSID_IDENTIFIER_AUTHORITY, UCHAR);
   VOID NTAPI RtlInitUnicodeString (PUNICODE_STRING, PCWSTR);
@@ -1606,6 +1683,34 @@ extern "C"
 				     &ebi, sizeof ebi, NULL))
 	   && ebi.SignalState != 0;
 
+  }
+
+  static inline void
+  start_transaction (HANDLE &old_trans, HANDLE &trans)
+  {
+    NTSTATUS status = NtCreateTransaction (&trans,
+				  SYNCHRONIZE | TRANSACTION_ALL_ACCESS,
+				  NULL, NULL, NULL, 0, 0, 0, NULL, NULL);
+    if (NT_SUCCESS (status))
+      {
+	old_trans = RtlGetCurrentTransaction ();
+	RtlSetCurrentTransaction (trans);
+      }
+    else
+      old_trans = trans = NULL;
+  }
+
+  static inline NTSTATUS
+  stop_transaction (NTSTATUS status, HANDLE old_trans, HANDLE &trans)
+  {
+    RtlSetCurrentTransaction (old_trans);
+    if (NT_SUCCESS (status))
+      status = NtCommitTransaction (trans, TRUE);
+    else
+      status = NtRollbackTransaction (trans, TRUE);
+    NtClose (trans);
+    trans = NULL;
+    return status;
   }
 }
 #endif

@@ -35,9 +35,8 @@ No supporting OS subroutines are required.
 #include <wchar.h>
 
 wchar_t *
-_DEFUN (wcsncpy, (s1, s2, n),
-	wchar_t *__restrict s1 _AND
-	_CONST wchar_t *__restrict s2 _AND
+wcsncpy (wchar_t *__restrict s1,
+	const wchar_t *__restrict s2,
 	size_t n)
 {
   wchar_t *dscan=s1;

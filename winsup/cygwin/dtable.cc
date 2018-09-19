@@ -304,14 +304,14 @@ dtable::init_std_file_from_handle (int fd, HANDLE handle)
 	dev.parse (name);
       else if (strcmp (name, ":sock:") == 0
 	       /* NtQueryObject returns an error when called on an LSP socket
-		  handle.  fdsock tries to fetch the underlying base socket,
-		  but this might fail. */
+		  handle.  fhandler_socket::set_socket_handle tries to fetch
+		  the underlying base socket, but this might fail. */
 	       || (strcmp (name, unknown_file) == 0
 		   && !::getsockopt ((SOCKET) handle, SOL_SOCKET, SO_RCVBUF,
 				     (char *) &rcv, &len)))
 	{
 	  /* socket */
-	  dev = *tcp_dev;
+	  dev = *af_inet_dev;
 	  name[0] = '\0';
 	}
       else if (fd == 0)
@@ -514,14 +514,17 @@ fh_alloc (path_conv& pc)
 	case FH_PIPEW:
 	  fh = cnew (fhandler_pipe);
 	  break;
-	case FH_TCP:
-	case FH_UDP:
-	case FH_ICMP:
-	case FH_UNIX:
-	case FH_STREAM:
-	case FH_DGRAM:
-	  fh = cnew (fhandler_socket);
+	case FH_INET:
+	  fh = cnew (fhandler_socket_inet);
 	  break;
+	case FH_LOCAL:
+	  fh = cnew (fhandler_socket_local);
+	  break;
+#ifdef __WITH_AF_UNIX
+	case FH_UNIX:
+	  fh = cnew (fhandler_socket_unix);
+	  break;
+#endif /* __WITH_AF_UNIX */
 	case FH_FS:
 	  fh = cnew (fhandler_disk_file);
 	  break;
@@ -589,9 +592,6 @@ fh_alloc (path_conv& pc)
 	      if (fh->dev () != FH_NADA)
 		fh->set_name ("/dev/tty");
 	    }
-	  break;
-	case FH_KMSG:
-	  fh = cnew (fhandler_mailslot);
 	  break;
       }
     }

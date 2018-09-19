@@ -35,16 +35,16 @@ until the corresponding <<__tz_unlock>> call on the same thread is made.
 __LOCK_INIT(static, __tz_mutex);
 #endif
 
-_VOID
-_DEFUN_VOID (__tz_lock)
+void
+__tz_lock (void)
 {
 #ifndef __SINGLE_THREAD__
   __lock_acquire(__tz_mutex);
 #endif
 }
 
-_VOID
-_DEFUN_VOID (__tz_unlock)
+void
+__tz_unlock (void)
 {
 #ifndef __SINGLE_THREAD__
   __lock_release(__tz_mutex);

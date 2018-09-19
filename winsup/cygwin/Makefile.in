@@ -249,6 +249,7 @@ MATH_OFILES:= \
 
 DLL_OFILES:= \
 	advapi32.o \
+	aio.o \
 	arc4random_stir.o \
 	assert.o \
 	autoload.o \
@@ -283,7 +284,6 @@ DLL_OFILES:= \
 	fhandler_dsp.o \
 	fhandler_fifo.o \
 	fhandler_floppy.o \
-	fhandler_mailslot.o \
 	fhandler_netdrive.o \
 	fhandler_nodevice.o \
 	fhandler_proc.o \
@@ -296,6 +296,9 @@ DLL_OFILES:= \
 	fhandler_registry.o \
 	fhandler_serial.o \
 	fhandler_socket.o \
+	fhandler_socket_inet.o \
+	fhandler_socket_local.o \
+	fhandler_socket_unix.o \
 	fhandler_tape.o \
 	fhandler_termios.o \
 	fhandler_tty.o \
@@ -333,6 +336,7 @@ DLL_OFILES:= \
 	mktemp.o \
 	mmap.o \
 	msg.o \
+	msgcat.o \
 	mount.o \
 	net.o \
 	netdb.o \
@@ -780,8 +784,6 @@ CTAGS:
 	-cd $(srcdir) && \
 	ctags -R --c++-kinds=+p --fields=+iaS --extra=+q \
 	--regex-C++='/EXPORT_ALIAS *\([a-zA-Z0-9_]*, *([a-zA-Z0-9_]*)\)/\1/' \
-	--regex-C++='/_EXFUN *\(([a-zA-Z0-9_]+) ?[,\)]/\1/' \
-	--regex-C++='/_EXFUN *\([^,]* ([a-zA-Z0-9_]+) ?[,\)]/\1/' \
 	--regex-C++='/__ASMNAME *\("([a-zA-Z0-9_]+)"\)/\1/' \
 	@newlib_headers@ .
 

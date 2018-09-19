@@ -63,9 +63,8 @@ No supporting OS subroutines are required.
 #include <wchar.h>
 
 wchar_t *
-_DEFUN (wmemchr, (s, c, n),
-	_CONST wchar_t * s _AND
-	wchar_t c _AND
+wmemchr (const wchar_t * s,
+	wchar_t c,
 	size_t n)
 {
   size_t i;

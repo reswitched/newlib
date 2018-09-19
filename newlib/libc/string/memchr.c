@@ -61,13 +61,12 @@ QUICKREF
    to fill (long)MASK. */
 #define DETECTCHAR(X,MASK) (DETECTNULL(X ^ MASK))
 
-_PTR
-_DEFUN (memchr, (src_void, c, length),
-	_CONST _PTR src_void _AND
-	int c _AND
+void *
+memchr (const void *src_void,
+	int c,
 	size_t length)
 {
-  _CONST unsigned char *src = (_CONST unsigned char *) src_void;
+  const unsigned char *src = (const unsigned char *) src_void;
   unsigned char d = c;
 
 #if !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__)

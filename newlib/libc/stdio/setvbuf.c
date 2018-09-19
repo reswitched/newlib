@@ -88,10 +88,9 @@ Supporting OS subroutines required: <<close>>, <<fstat>>, <<isatty>>,
  */
 
 int
-_DEFUN(setvbuf, (fp, buf, mode, size),
-       register FILE * fp _AND
-       char *buf          _AND
-       register int mode  _AND
+setvbuf (register FILE * fp,
+       char *buf,
+       register int mode,
        register size_t size)
 {
   int ret = 0;
@@ -123,7 +122,7 @@ _DEFUN(setvbuf, (fp, buf, mode, size),
     FREEUB(reent, fp);
   fp->_r = fp->_lbfsize = 0;
   if (fp->_flags & __SMBF)
-    _free_r (reent, (_PTR) fp->_bf._base);
+    _free_r (reent, (void *) fp->_bf._base);
   fp->_flags &= ~(__SLBF | __SNBF | __SMBF | __SOPT | __SNPT | __SEOF);
 
   if (mode == _IONBF)

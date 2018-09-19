@@ -33,9 +33,8 @@ PORTABILITY
 #include <wchar.h>
 
 int
-_DEFUN (wcscoll, (a, b),
-	_CONST wchar_t *a _AND
-	_CONST wchar_t *b)
+wcscoll (const wchar_t *a,
+	const wchar_t *b)
 
 {
   return wcscmp (a, b);

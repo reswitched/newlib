@@ -52,9 +52,8 @@ DESCRIPTION
 */
 
 int
-_DEFUN (_gettimeofday_r, (ptr, ptimeval, ptimezone),
-     struct _reent *ptr _AND
-     struct timeval *ptimeval _AND
+_gettimeofday_r (struct _reent *ptr,
+     struct timeval *ptimeval,
      void *ptimezone)
 {
   int ret;

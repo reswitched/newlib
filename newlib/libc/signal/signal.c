@@ -89,8 +89,7 @@ int _dummy_simulated_signal;
 #include <_syslist.h>
 
 int
-_DEFUN (_init_signal_r, (ptr),
-	struct _reent *ptr)
+_init_signal_r (struct _reent *ptr)
 {
   int i;
 
@@ -108,9 +107,8 @@ _DEFUN (_init_signal_r, (ptr),
 }
 
 _sig_func_ptr
-_DEFUN (_signal_r, (ptr, sig, func),
-	struct _reent *ptr _AND
-	int sig _AND
+_signal_r (struct _reent *ptr,
+	int sig,
 	_sig_func_ptr func)
 {
   _sig_func_ptr old_func;
@@ -131,8 +129,7 @@ _DEFUN (_signal_r, (ptr, sig, func),
 }
 
 int 
-_DEFUN (_raise_r, (ptr, sig),
-     struct _reent *ptr _AND
+_raise_r (struct _reent *ptr,
      int sig)
 {
   _sig_func_ptr func;
@@ -166,8 +163,7 @@ _DEFUN (_raise_r, (ptr, sig),
 }
 
 int
-_DEFUN (__sigtramp_r, (ptr, sig),
-     struct _reent *ptr _AND
+__sigtramp_r (struct _reent *ptr,
      int sig)
 {
   _sig_func_ptr func;
@@ -198,28 +194,26 @@ _DEFUN (__sigtramp_r, (ptr, sig),
 #ifndef _REENT_ONLY
 
 int 
-_DEFUN (raise, (sig),
-     int sig)
+raise (int sig)
 {
   return _raise_r (_REENT, sig);
 }
 
 _sig_func_ptr
-_DEFUN (signal, (sig, func),
-	int sig _AND
+signal (int sig,
 	_sig_func_ptr func)
 {
   return _signal_r (_REENT, sig, func);
 }
 
 int 
-_DEFUN_VOID (_init_signal)
+_init_signal (void)
 {
   return _init_signal_r (_REENT);
 }
 
 int
-_DEFUN (__sigtramp, (sig), int sig)
+__sigtramp (int sig)
 {
   return __sigtramp_r (_REENT, sig);
 }

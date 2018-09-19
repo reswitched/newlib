@@ -19,6 +19,7 @@ details. */
 #include "ntdll.h"
 #include "tls_pbuf.h"
 #include "cpuid.h"
+#include "hires.h"
 
 static long
 get_open_max (int in)
@@ -527,7 +528,7 @@ static struct
   {cons, {c:SIGQUEUE_MAX}},		/*  18, _SC_SIGQUEUE_MAX */
   {cons, {c:TIMER_MAX}},		/*  19, _SC_TIMER_MAX */
   {nsup, {c:0}},			/*  20, _SC_TZNAME_MAX */
-  {cons, {c:-1L}},			/*  21, _SC_ASYNCHRONOUS_IO */
+  {cons, {c:_POSIX_ASYNCHRONOUS_IO}},	/*  21, _SC_ASYNCHRONOUS_IO */
   {cons, {c:_POSIX_FSYNC}},		/*  22, _SC_FSYNC */
   {cons, {c:_POSIX_MAPPED_FILES}},	/*  23, _SC_MAPPED_FILES */
   {cons, {c:-1L}},			/*  24, _SC_MEMLOCK */
@@ -540,9 +541,9 @@ static struct
   {cons, {c:_POSIX_SHARED_MEMORY_OBJECTS}},	/*  31, _SC_SHARED_MEMORY_OBJECTS */
   {cons, {c:_POSIX_SYNCHRONIZED_IO}},	/*  32, _SC_SYNCHRONIZED_IO */
   {cons, {c:_POSIX_TIMERS}},		/*  33, _SC_TIMERS */
-  {nsup, {c:0}},			/*  34, _SC_AIO_LISTIO_MAX */
-  {nsup, {c:0}},			/*  35, _SC_AIO_MAX */
-  {nsup, {c:0}},			/*  36, _SC_AIO_PRIO_DELTA_MAX */
+  {cons, {c:AIO_LISTIO_MAX}},		/*  34, _SC_AIO_LISTIO_MAX */
+  {cons, {c:AIO_MAX}},			/*  35, _SC_AIO_MAX */
+  {cons, {c:AIO_PRIO_DELTA_MAX}},	/*  36, _SC_AIO_PRIO_DELTA_MAX */
   {nsup, {c:0}},			/*  37, _SC_DELAYTIMER_MAX */
   {cons, {c:PTHREAD_KEYS_MAX}},		/*  38, _SC_THREAD_KEYS_MAX */
   {cons, {c:PTHREAD_STACK_MIN}},	/*  39, _SC_THREAD_STACK_MIN */
@@ -719,10 +720,14 @@ static struct
   {ls ("")},				/* _CS_POSIX_V7_THREADS_CFLAGS */
   {ls ("")},				/* _CS_POSIX_V7_THREADS_LDFLAGS */
   {ls ("POSIXLY_CORRECT=1")},		/* _CS_V7_ENV */
+  {ls ("")},				/* _CS_LFS_CFLAGS */
+  {ls ("")},				/* _CS_LFS_LDFLAGS */
+  {ls ("")},				/* _CS_LFS_LIBS */
+  {ls ("")},				/* _CS_LFS_LINTFLAGS */
 };
 
 #define CS_MIN _CS_PATH
-#define CS_MAX _CS_V7_ENV
+#define CS_MAX _CS_LFS_LINTFLAGS
 
 extern "C" size_t
 confstr (int in, char *buf, size_t len)
@@ -789,7 +794,7 @@ sysinfo (struct sysinfo *info)
 				     sizeof_stodi, NULL);
   if (NT_SUCCESS (status))
     uptime = (stodi->CurrentTime.QuadPart - stodi->BootTime.QuadPart)
-	     / 10000000ULL;
+	     / NS100PERSEC;
   else
     debug_printf ("NtQuerySystemInformation(SystemTimeOfDayInformation), "
 		  "status %y", status);

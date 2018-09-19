@@ -27,6 +27,8 @@
 #   newlib_io_c99_formats --enable-newlib-io-c99-formats ("yes", "no", "")
 #   newlib_io_long_long --enable-newlib-io-long-long ("yes", "no", "")
 #   newlib_io_long_double --enable-newlib-io-long-double ("yes", "no", "")
+#   newlib_global_stdio_streams --enable-global-stdio-streams ("yes", "no, "")
+#   newlib_fno_builtin  --disable-newlib-fno-builtin ("yes", "no, "")
 
 # It sets the following shell variables:
 #   newlib_cflags	Special CFLAGS to use when building
@@ -46,6 +48,7 @@
 #   crt1_dir            directory where crt1 object is found
 #   have_crt0		"yes"/"no" if crt0 is/isn't provided.
 #			"" if crt0 is provided when sys_dir is set
+#   have_init_fini	have init/fini ("yes" or "no", set to "yes" by default)
 #   noinclude		list of include files to not install
 
 newlib_cflags=
@@ -64,6 +67,7 @@ mach_add_setjmp=
 crt1=
 crt1_dir=
 have_crt0=
+have_init_fini=yes
 use_libtool=no
 have_sys_mach_dir=no
 default_newlib_io_c99_formats=no
@@ -75,6 +79,7 @@ default_newlib_nano_malloc=no
 aext=a
 oext=o
 lpfx="lib_a-"
+newlib_msg_warn=
 
 case "${target_optspace}:${host}" in
   yes:*)
@@ -84,6 +89,19 @@ case "${target_optspace}:${host}" in
     newlib_cflags="${newlib_cflags} -Os"
     ;;
   no:* | :*)
+    ;;
+esac
+
+case "${newlib_fno_builtin}:${host}" in
+  yes:*)
+    newlib_cflags="${newlib_cflags} -fno-builtin"
+    ;;
+  no:*)
+    newlib_cflags="${newlib_cflags}"
+    ;;
+  *:*)
+    # For now, all targets default to using -fno-builtin until tested without
+    newlib_cflags="${newlib_cflags} -fno-builtin"
     ;;
 esac
 
@@ -117,6 +135,12 @@ case "${host_cpu}" in
 	machine_dir=cr16
        ;;
   cris | crisv32)
+	# The size of the (kernel_)time_t passed from or to a
+	# simulator or a Linux kernel is mandated by the
+	# gettimeofday and time system calls and fixed to 32 bits, the
+	# size of a long.  Instead of churning as 64 bits what is anyway
+	# 32 bits, it makes more sense to default to long.
+	test -z "${enable_newlib_long_time_t}" && newlib_long_time_t=yes
 	machine_dir=cris
 	;;
   crx*)
@@ -249,6 +273,10 @@ case "${host_cpu}" in
   nios2*)
 	machine_dir=nios2
 	;;
+  nvptx*)
+	machine_dir=nvptx
+	newlib_cflags="${newlib_cflags} -DMALLOC_PROVIDED"
+	;;
   or1k*|or1knd*)
 	machine_dir=or1k
 	;;
@@ -260,6 +288,7 @@ case "${host_cpu}" in
 	machine_dir=riscv
 	newlib_cflags="${newlib_cflags} -DHAVE_NANOSLEEP"
 	default_newlib_atexit_dynamic_alloc="no"
+	have_init_fini=no
 	;;
   rl78)
 	machine_dir=rl78
@@ -410,6 +439,7 @@ case "${host}" in
 	signal_dir=
 	;;
   arm*-*-*)
+	newlib_cflags="${newlib_cflags} -D_COMPILING_NEWLIB"
 	sys_dir=arm
 	if [ "x${newlib_may_supply_syscalls}" = "xno" ] ; then
 	  have_crt0="no"
@@ -917,6 +947,25 @@ if [ "x${xdr_dir}" = "x" ]; then
 	noinclude="${noinclude} rpc/types.h rpc/xdr.h"
 fi
 
+# Have init/finit if not explicitly specified otherwise
+if [ "x${have_init_fini}" != "xno" ]; then
+	newlib_cflags="${newlib_cflags} -DHAVE_INIT_FINI"
+fi
+
 if test -z "${have_crt0}" && test -n "${sys_dir}"; then
   have_crt0="yes"
 fi
+
+# Target-specific defaults
+case "${host_cpu}" in
+  nvptx*)
+	if [ "x${newlib_elix_level}" = "x0" ]; then
+		newlib_elix_level=1;
+	elif [ "x${newlib_elix_level}" != "x1" ]; then
+		newlib_msg_warn="nvptx does not support elix level > 1";
+	fi
+	if [[ -z ${newlib_global_stdio_streams} ]]; then
+		newlib_global_stdio_streams="yes";
+	fi
+	;;
+esac

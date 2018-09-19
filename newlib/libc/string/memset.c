@@ -33,11 +33,10 @@ QUICKREF
 #define UNALIGNED(X)   ((long)X & (LBLOCKSIZE - 1))
 #define TOO_SMALL(LEN) ((LEN) < LBLOCKSIZE)
 
-_PTR
+void *
 __inhibit_loop_to_libcall
-_DEFUN (memset, (m, c, n),
-	_PTR m _AND
-	int c _AND
+memset (void *m,
+	int c,
 	size_t n)
 {
   char *s = (char *) m;

@@ -12,6 +12,11 @@ details. */
 #include "wincap.h"
 #include <string.h>
 
+/*  x87 supports subnormal numbers so we need it below. */
+#define __FE_DENORM	(1 << 1)
+/* mask (= 0x3f) to disable all exceptions at initialization */
+#define __FE_ALL_EXCEPT_X86 (FE_ALL_EXCEPT | __FE_DENORM)
+
 /*  Mask and shift amount for rounding bits.  */
 #define FE_CW_ROUND_MASK	(0x0c00)
 #define FE_CW_ROUND_SHIFT	(10)
@@ -141,7 +146,11 @@ fegetexcept (void)
 int
 fegetenv (fenv_t *envp)
 {
-  __asm__ volatile ("fnstenv %0" : "=m" (envp->_fpu) : );
+  /* fnstenv disables all exceptions in the x87 FPU; as this is not what is
+     desired here, reload the cfg saved from the x87 FPU, back to the FPU */
+  __asm__ volatile ("fnstenv %0\n\
+                     fldenv %0"
+		    : "=m" (envp->_fpu) : );
   if (use_sse)
     __asm__ volatile ("stmxcsr %0" : "=m" (envp->_sse_mxcsr) : );
   return 0;
@@ -413,7 +422,7 @@ fesetprec (int prec)
 void
 _feinitialise (void)
 {
-  unsigned int edx, eax, mxcsr;
+  unsigned int edx, eax;
 
   /* Check for presence of SSE: invoke CPUID #1, check EDX bit 25.  */
   eax = 1;
@@ -427,11 +436,13 @@ _feinitialise (void)
   /* The default cw value, 0x37f, is rounding mode zero.  The MXCSR has
      no precision control, so the only thing to do is set the exception
      mask bits.  */
-  mxcsr = FE_ALL_EXCEPT << FE_SSE_EXCEPT_MASK_SHIFT;
+
+  /* initialize the MXCSR register: mask all exceptions */
+  unsigned int mxcsr = __FE_ALL_EXCEPT_X86 << FE_SSE_EXCEPT_MASK_SHIFT;
   if (use_sse)
     __asm__ volatile ("ldmxcsr %0" :: "m" (mxcsr));
 
-  /* Setup unmasked environment.  */
+  /* Setup unmasked environment, but leave __FE_DENORM masked.  */
   feenableexcept (FE_ALL_EXCEPT);
   fegetenv (&fe_nomask_env);
 

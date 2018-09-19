@@ -200,7 +200,7 @@ cygwin_exception::dump_exception ()
   small_printf ("r14=%016X r15=%016X\r\n", ctx->R14, ctx->R15);
   small_printf ("rbp=%016X rsp=%016X\r\n", ctx->Rbp, ctx->Rsp);
   small_printf ("program=%W, pid %u, thread %s\r\n",
-		myself->progname, myself->pid, cygthread::name ());
+		myself->progname, myself->pid, mythreadname ());
 #else
   if (exception_name)
     small_printf ("Exception: %s at eip=%08x\r\n", exception_name, ctx->Eip);
@@ -210,7 +210,7 @@ cygwin_exception::dump_exception ()
 		ctx->Eax, ctx->Ebx, ctx->Ecx, ctx->Edx, ctx->Esi, ctx->Edi);
   small_printf ("ebp=%08x esp=%08x program=%W, pid %u, thread %s\r\n",
 		ctx->Ebp, ctx->Esp, myself->progname, myself->pid,
-		cygthread::name ());
+		mythreadname ());
 #endif
   small_printf ("cs=%04x ds=%04x es=%04x fs=%04x gs=%04x ss=%04x\r\n",
 		ctx->SegCs, ctx->SegDs, ctx->SegEs, ctx->SegFs,
@@ -649,9 +649,15 @@ exception::handle (EXCEPTION_RECORD *e, exception_list *frame, CONTEXT *in,
   /* Coerce win32 value to posix value.  */
   switch (e->ExceptionCode)
     {
-    case STATUS_FLOAT_DENORMAL_OPERAND:
     case STATUS_FLOAT_DIVIDE_BY_ZERO:
+      si.si_signo = SIGFPE;
+      si.si_code = FPE_FLTDIV;
+      break;
+    case STATUS_FLOAT_DENORMAL_OPERAND:
     case STATUS_FLOAT_INVALID_OPERATION:
+      si.si_signo = SIGFPE;
+      si.si_code = FPE_FLTINV;
+      break;
     case STATUS_FLOAT_STACK_CHECK:
       si.si_signo = SIGFPE;
       si.si_code = FPE_FLTSUB;
@@ -800,26 +806,6 @@ exception::handle (EXCEPTION_RECORD *e, exception_list *frame, CONTEXT *in,
       return ExceptionContinueExecution;
     }
 
-  /* FIXME: Probably should be handled in signal processing code */
-  if ((NTSTATUS) e->ExceptionCode == STATUS_ACCESS_VIOLATION)
-    {
-      int error_code = 0;
-      if (si.si_code == SEGV_ACCERR)	/* Address present */
-	error_code |= 1;
-      if (e->ExceptionInformation[0])	/* Write access */
-	error_code |= 2;
-      if (!me.inside_kernel (in))	/* User space */
-	error_code |= 4;
-      klog (LOG_INFO,
-#ifdef __x86_64__
-	    "%s[%d]: segfault at %011X rip %011X rsp %011X error %d",
-#else
-	    "%s[%d]: segfault at %08x rip %08x rsp %08x error %d",
-#endif
-	    __progname, myself->pid,
-	    e->ExceptionInformation[1], in->_GR(ip), in->_GR(sp),
-	    error_code);
-    }
   cygwin_exception exc (framep, in, e);
   si.si_cyg = (void *) &exc;
   /* POSIX requires that for SIGSEGV and SIGBUS, si_addr should be set to the

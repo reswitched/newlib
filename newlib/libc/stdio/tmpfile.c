@@ -50,8 +50,7 @@ Supporting OS subroutines required: <<close>>, <<fstat>>, <<getpid>>,
 #endif
 
 FILE *
-_DEFUN(_tmpfile_r, (ptr),
-       struct _reent *ptr)
+_tmpfile_r (struct _reent *ptr)
 {
   FILE *fp;
   int e;
@@ -73,7 +72,7 @@ _DEFUN(_tmpfile_r, (ptr),
   e = ptr->_errno;
   if (!fp)
     _close_r (ptr, fd);
-  _CAST_VOID _remove_r (ptr, f);
+  (void) _remove_r (ptr, f);
   ptr->_errno = e;
   return fp;
 }
@@ -81,7 +80,7 @@ _DEFUN(_tmpfile_r, (ptr),
 #ifndef _REENT_ONLY
 
 FILE *
-_DEFUN_VOID(tmpfile)
+tmpfile (void)
 {
   return _tmpfile_r (_REENT);
 }

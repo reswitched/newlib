@@ -103,20 +103,18 @@ Supporting OS subroutines required: <<close>>, <<fstat>>, <<isatty>>,
 #include "local.h"
 
 char *
-_DEFUN (fcvt, (d, ndigit, decpt, sign),
-	double d _AND
-	int ndigit _AND
-	int *decpt _AND
+fcvt (double d,
+	int ndigit,
+	int *decpt,
 	int *sign)
 {
   return fcvtbuf (d, ndigit, decpt, sign, NULL);
 }
 
 char *
-_DEFUN (fcvtf, (d, ndigit, decpt, sign),
-	float d _AND
-	int ndigit _AND
-	int *decpt _AND
+fcvtf (float d,
+	int ndigit,
+	int *decpt,
 	int *sign)
 {
   return fcvt ((float) d, ndigit, decpt, sign);
@@ -124,9 +122,8 @@ _DEFUN (fcvtf, (d, ndigit, decpt, sign),
 
 
 char *
-_DEFUN (gcvtf, (d, ndigit, buf),
-	float d _AND
-	int ndigit _AND
+gcvtf (float d,
+	int ndigit,
 	char *buf)
 {
   double asd = d;
@@ -135,20 +132,18 @@ _DEFUN (gcvtf, (d, ndigit, buf),
 
 
 char *
-_DEFUN (ecvt, (d, ndigit, decpt, sign),
-	double d _AND
-	int ndigit _AND
-	int *decpt _AND
+ecvt (double d,
+	int ndigit,
+	int *decpt,
 	int *sign)
 {
   return ecvtbuf (d, ndigit, decpt, sign, NULL);
 }
 
 char *
-_DEFUN (ecvtf, (d, ndigit, decpt, sign),
-	float d _AND
-	int ndigit _AND
-	int *decpt _AND
+ecvtf (float d,
+	int ndigit,
+	int *decpt,
 	int *sign)
 {
   return ecvt ((double) d, ndigit, decpt, sign);
@@ -156,9 +151,8 @@ _DEFUN (ecvtf, (d, ndigit, decpt, sign),
 
 
 char *
-_DEFUN (gcvt, (d, ndigit, buf),
-	double d _AND
-	int ndigit _AND
+gcvt (double d,
+	int ndigit,
 	char *buf)
 {
   char *tbuf = buf;

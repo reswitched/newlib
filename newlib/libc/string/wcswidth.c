@@ -34,8 +34,7 @@ PORTABILITY
 #include "local.h"
 
 int
-_DEFUN (wcswidth, (pwcs, n),
-	_CONST wchar_t *pwcs _AND
+wcswidth (const wchar_t *pwcs,
 	size_t n)
 
 {

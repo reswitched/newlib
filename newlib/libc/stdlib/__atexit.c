@@ -39,7 +39,9 @@
 #include "atexit.h"
 
 /* Make this a weak reference to avoid pulling in malloc.  */
+#ifndef MALLOC_PROVIDED
 void * malloc(size_t) _ATTRIBUTE((__weak__));
+#endif
 
 #ifdef _LITE_EXIT
 /* As __call_exitprocs is weak reference in lite exit, make a
@@ -63,11 +65,9 @@ static struct _atexit _global_atexit0 = _ATEXIT_INIT;
  */
 
 int
-_DEFUN (__register_exitproc,
-	(type, fn, arg, d),
-	int type _AND
-	void (*fn) (void) _AND
-	void *arg _AND
+__register_exitproc (int type,
+	void (*fn) (void),
+	void *arg,
 	void *d)
 {
   struct _on_exit_args * args;
@@ -89,22 +89,12 @@ _DEFUN (__register_exitproc,
     }
   if (p->_ind >= _ATEXIT_SIZE)
     {
-#ifndef _ATEXIT_DYNAMIC_ALLOC
+#if !defined (_ATEXIT_DYNAMIC_ALLOC) || !defined (MALLOC_PROVIDED)
 #ifndef __SINGLE_THREAD__
       __lock_release_recursive(__atexit_recursive_mutex);
 #endif
       return -1;
 #else
-      /* Don't dynamically allocate the atexit array if malloc is not
-	 available.  */
-      if (!malloc)
-	{
-#ifndef __SINGLE_THREAD__
-	  __lock_release_recursive(__atexit_recursive_mutex);
-#endif
-	  return -1;
-	}
-
       p = (struct _atexit *) malloc (sizeof *p);
       if (p == NULL)
 	{

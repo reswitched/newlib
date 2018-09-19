@@ -108,11 +108,10 @@ static char sccsid[] = "%W% (Berkeley) %G%";
  */
 
 size_t
-_DEFUN(_fwrite_r, (ptr, buf, size, count, fp),
-       struct _reent * ptr _AND
-       _CONST _PTR __restrict buf _AND
-       size_t size     _AND
-       size_t count    _AND
+_fwrite_r (struct _reent * ptr,
+       const void *__restrict buf,
+       size_t size,
+       size_t count,
        FILE * __restrict fp)
 {
   size_t n;
@@ -144,7 +143,7 @@ _DEFUN(_fwrite_r, (ptr, buf, size, count, fp),
   return (n - uio.uio_resid) / size;
 #else
   size_t i = 0;
-  _CONST char *p = buf;
+  const char *p = buf;
   n = count * size;
   CHECK_INIT (ptr, fp);
 
@@ -170,10 +169,9 @@ ret:
 
 #ifndef _REENT_ONLY
 size_t
-_DEFUN(fwrite, (buf, size, count, fp),
-       _CONST _PTR __restrict buf _AND
-       size_t size     _AND
-       size_t count    _AND
+fwrite (const void *__restrict buf,
+       size_t size,
+       size_t count,
        FILE * fp)
 {
   return _fwrite_r (_REENT, buf, size, count, fp);

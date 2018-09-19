@@ -104,11 +104,10 @@ int hash_accesses, hash_collisions, hash_expansions, hash_overflows;
 /* OPEN/CLOSE */
 
 extern DB *
-_DEFUN(__hash_open, (file, flags, mode, info, dflags),
-	const char *file _AND
-	int flags _AND
-	int mode _AND
-	int dflags _AND
+__hash_open (const char *file,
+	int flags,
+	int mode,
+	int dflags,
 	const HASHINFO *info)	/* Special directives for create */
 {
 	HTAB *hashp;
@@ -194,6 +193,9 @@ _DEFUN(__hash_open, (file, flags, mode, info, dflags),
 			RETURN_ERROR(EFTYPE, error1);
 		if (hashp->hash(CHARKEY, sizeof(CHARKEY)) != hashp->H_CHARKEY)
 			RETURN_ERROR(EFTYPE, error1);
+                /* Check bucket size isn't too big for target int. */
+                if (hashp->BSIZE > INT_MAX)
+                        RETURN_ERROR(EFTYPE, error1);
 		/*
 		 * Figure out how many segments we need.  Max_Bucket is the
 		 * maximum bucket number, so the number of buckets is
@@ -344,7 +346,7 @@ init_hash(hashp, file, info)
 		if (stat(file, &statbuf))
 #endif
 			return (NULL);
-		hashp->BSIZE = statbuf.st_blksize;
+		hashp->BSIZE = MIN(statbuf.st_blksize, MAX_BSIZE);
 		hashp->BSHIFT = __log2(hashp->BSIZE);
 	}
 

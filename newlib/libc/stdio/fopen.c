@@ -113,10 +113,9 @@ static char sccsid[] = "%W% (Berkeley) %G%";
 #include "local.h"
 
 FILE *
-_DEFUN(_fopen_r, (ptr, file, mode),
-       struct _reent *ptr _AND
-       _CONST char *__restrict file _AND
-       _CONST char *__restrict mode)
+_fopen_r (struct _reent *ptr,
+       const char *__restrict file,
+       const char *__restrict mode)
 {
   register FILE *fp;
   register int f;
@@ -142,7 +141,7 @@ _DEFUN(_fopen_r, (ptr, file, mode),
 
   fp->_file = f;
   fp->_flags = flags;
-  fp->_cookie = (_PTR) fp;
+  fp->_cookie = (void *) fp;
   fp->_read = __sread;
   fp->_write = __swrite;
   fp->_seek = __sseek;
@@ -163,9 +162,8 @@ _DEFUN(_fopen_r, (ptr, file, mode),
 #ifndef _REENT_ONLY
 
 FILE *
-_DEFUN(fopen, (file, mode),
-       _CONST char *file _AND
-       _CONST char *mode)
+fopen (const char *file,
+       const char *mode)
 {
   return _fopen_r (_REENT, file, mode);
 }

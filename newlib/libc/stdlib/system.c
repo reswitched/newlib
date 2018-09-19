@@ -53,13 +53,12 @@ Supporting OS subroutines required: <<_exit>>, <<_execve>>, <<_fork_r>>,
 #include <reent.h>
 
 #if defined (unix) || defined (__CYGWIN__)
-static int _EXFUN(do_system, (struct _reent *ptr _AND _CONST char *s));
+static int do_system (struct _reent *ptr, const char *s);
 #endif
 
 int
-_DEFUN(_system_r, (ptr, s),
-     struct _reent *ptr _AND
-     _CONST char *s)
+_system_r (struct _reent *ptr,
+     const char *s)
 {
 #if defined(HAVE_SYSTEM)
   return _system (s);
@@ -93,8 +92,7 @@ _DEFUN(_system_r, (ptr, s),
 #ifndef _REENT_ONLY
 
 int
-_DEFUN(system, (s),
-     _CONST char *s)
+system (const char *s)
 {
   return _system_r (_REENT, s);
 }
@@ -110,9 +108,8 @@ extern char **environ;
 static char ***p_environ = &environ;
 
 static int
-_DEFUN(do_system, (ptr, s),
-     struct _reent *ptr _AND
-     _CONST char *s)
+do_system (struct _reent *ptr,
+     const char *s)
 {
   char *argv[4];
   int pid, status;
@@ -142,9 +139,8 @@ _DEFUN(do_system, (ptr, s),
 
 #if defined (__CYGWIN__)
 static int
-_DEFUN(do_system, (ptr, s),
-     struct _reent *ptr _AND
-     _CONST char *s)
+do_system (struct _reent *ptr,
+     const char *s)
 {
   char *argv[4];
   int pid, status;

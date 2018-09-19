@@ -26,7 +26,7 @@
 #include <sys/lock.h>
 #include "local.h"
 
-#ifdef _REENT_SMALL
+#if defined(_REENT_SMALL) && !defined(_REENT_GLOBAL_STDIO_STREAMS)
 const struct __sFILE_fake __sf_fake_stdin =
     {_NULL, 0, 0, 0, 0, {_NULL, 0}, 0, _NULL};
 const struct __sFILE_fake __sf_fake_stdout =
@@ -40,13 +40,12 @@ __FILE __sf[3];
 #endif
 
 #if (defined (__OPTIMIZE_SIZE__) || defined (PREFER_SIZE_OVER_SPEED))
-_NOINLINE_STATIC _VOID
+_NOINLINE_STATIC void
 #else
-static _VOID
+static void
 #endif
-_DEFUN(std, (ptr, flags, file),
-            FILE *ptr _AND
-            int flags _AND
+std (FILE *ptr,
+            int flags,
             int file)
 {
   ptr->_p = 0;
@@ -74,7 +73,7 @@ _DEFUN(std, (ptr, flags, file),
 #else /* _STDIO_CLOSE_STD_STREAMS */
   ptr->_close = NULL;
 #endif /* _STDIO_CLOSE_STD_STREAMS */
-#if !defined(__SINGLE_THREAD__) && !defined(_REENT_SMALL)
+#if !defined(__SINGLE_THREAD__) && !(defined(_REENT_SMALL) && !defined(_REENT_GLOBAL_STDIO_STREAMS))
   __lock_init_recursive (ptr->_lock);
   /*
    * #else
@@ -124,8 +123,7 @@ struct glue_with_file {
 };
 
 struct _glue *
-_DEFUN(__sfmoreglue, (d, n),
-       struct _reent *d _AND
+__sfmoreglue (struct _reent *d,
        register int n)
 {
   struct glue_with_file *g;
@@ -146,8 +144,7 @@ _DEFUN(__sfmoreglue, (d, n),
  */
 
 FILE *
-_DEFUN(__sfp, (d),
-       struct _reent *d)
+__sfp (struct _reent *d)
 {
   FILE *fp;
   int n;
@@ -203,9 +200,8 @@ found:
  * The name `_cleanup' is, alas, fairly well known outside stdio.
  */
 
-_VOID
-_DEFUN(_cleanup_r, (ptr),
-       struct _reent *ptr)
+void
+_cleanup_r (struct _reent *ptr)
 {
   int (*cleanup_func) (struct _reent *, FILE *);
 #ifdef _STDIO_BSD_SEMANTICS
@@ -230,12 +226,12 @@ _DEFUN(_cleanup_r, (ptr),
   if (ptr->_stderr != &__sf[2])
     (*cleanup_func) (ptr, ptr->_stderr);
 #endif
-  _CAST_VOID _fwalk_reent (ptr, cleanup_func);
+  (void) _fwalk_reent (ptr, cleanup_func);
 }
 
 #ifndef _REENT_ONLY
-_VOID
-_DEFUN_VOID(_cleanup)
+void
+_cleanup (void)
 {
   _cleanup_r (_GLOBAL_REENT);
 }
@@ -245,9 +241,8 @@ _DEFUN_VOID(_cleanup)
  * __sinit() is called whenever stdio's internal variables must be set up.
  */
 
-_VOID
-_DEFUN(__sinit, (s),
-       struct _reent *s)
+void
+__sinit (struct _reent *s)
 {
   __sinit_lock_acquire ();
 
@@ -265,7 +260,7 @@ _DEFUN(__sinit, (s),
 # ifndef _REENT_GLOBAL_STDIO_STREAMS
   s->__sglue._niobs = 3;
   s->__sglue._iobs = &s->__sf[0];
-# endif
+# endif /* _REENT_GLOBAL_STDIO_STREAMS */
 #else
   s->__sglue._niobs = 0;
   s->__sglue._iobs = NULL;
@@ -274,9 +269,15 @@ _DEFUN(__sinit, (s),
      __sinit if it's 0. */
   if (s == _GLOBAL_REENT)
     s->__sdidinit = 1;
+# ifndef _REENT_GLOBAL_STDIO_STREAMS
   s->_stdin = __sfp(s);
   s->_stdout = __sfp(s);
   s->_stderr = __sfp(s);
+# else /* _REENT_GLOBAL_STDIO_STREAMS */
+  s->_stdin = &__sf[0];
+  s->_stdout = &__sf[1];
+  s->_stderr = &__sf[2];
+# endif /* _REENT_GLOBAL_STDIO_STREAMS */
 #endif
 
 #ifdef _REENT_GLOBAL_STDIO_STREAMS
@@ -287,11 +288,11 @@ _DEFUN(__sinit, (s),
     stdout_init (&__sf[1]);
     stderr_init (&__sf[2]);
   }
-#else
+#else /* _REENT_GLOBAL_STDIO_STREAMS */
   stdin_init (s->_stdin);
   stdout_init (s->_stdout);
   stderr_init (s->_stderr);
-#endif
+#endif /* _REENT_GLOBAL_STDIO_STREAMS */
 
   s->__sdidinit = 1;
 
@@ -303,34 +304,33 @@ _DEFUN(__sinit, (s),
 __LOCK_INIT_RECURSIVE(static, __sfp_recursive_mutex);
 __LOCK_INIT_RECURSIVE(static, __sinit_recursive_mutex);
 
-_VOID
-_DEFUN_VOID(__sfp_lock_acquire)
+void
+__sfp_lock_acquire (void)
 {
   __lock_acquire_recursive (__sfp_recursive_mutex);
 }
 
-_VOID
-_DEFUN_VOID(__sfp_lock_release)
+void
+__sfp_lock_release (void)
 {
   __lock_release_recursive (__sfp_recursive_mutex);
 }
 
-_VOID
-_DEFUN_VOID(__sinit_lock_acquire)
+void
+__sinit_lock_acquire (void)
 {
   __lock_acquire_recursive (__sinit_recursive_mutex);
 }
 
-_VOID
-_DEFUN_VOID(__sinit_lock_release)
+void
+__sinit_lock_release (void)
 {
   __lock_release_recursive (__sinit_recursive_mutex);
 }
 
 /* Walkable file locking routine.  */
 static int
-_DEFUN(__fp_lock, (ptr),
-       FILE * ptr)
+__fp_lock (FILE * ptr)
 {
   if (!(ptr->_flags2 & __SNLK))
     _flockfile (ptr);
@@ -340,8 +340,7 @@ _DEFUN(__fp_lock, (ptr),
 
 /* Walkable file unlocking routine.  */
 static int
-_DEFUN(__fp_unlock, (ptr),
-       FILE * ptr)
+__fp_unlock (FILE * ptr)
 {
   if (!(ptr->_flags2 & __SNLK))
     _funlockfile (ptr);
@@ -349,18 +348,18 @@ _DEFUN(__fp_unlock, (ptr),
   return 0;
 }
 
-_VOID
-_DEFUN_VOID(__fp_lock_all)
+void
+__fp_lock_all (void)
 {
   __sfp_lock_acquire ();
 
-  _CAST_VOID _fwalk (_REENT, __fp_lock);
+  (void) _fwalk (_REENT, __fp_lock);
 }
 
-_VOID
-_DEFUN_VOID(__fp_unlock_all)
+void
+__fp_unlock_all (void)
 {
-  _CAST_VOID _fwalk (_REENT, __fp_unlock);
+  (void) _fwalk (_REENT, __fp_unlock);
 
   __sfp_lock_release ();
 }

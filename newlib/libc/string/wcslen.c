@@ -55,10 +55,9 @@ No supporting OS subroutines are required.
 #include <wchar.h>
 
 size_t
-_DEFUN (wcslen, (s),
-	_CONST wchar_t * s)
+wcslen (const wchar_t * s)
 {
-  _CONST wchar_t *p;
+  const wchar_t *p;
 
   p = s;
   while (*p)

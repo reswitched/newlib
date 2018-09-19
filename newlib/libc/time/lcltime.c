@@ -43,8 +43,7 @@ ANSI C requires <<localtime>>.
 #ifndef _REENT_ONLY
 
 struct tm *
-_DEFUN (localtime, (tim_p),
-	_CONST time_t * tim_p)
+localtime (const time_t * tim_p)
 {
   struct _reent *reent = _REENT;
 

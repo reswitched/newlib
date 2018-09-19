@@ -62,17 +62,15 @@ PORTABILITY
 #include <_ansi.h>
 
 __int16_t
-_DEFUN (_atosfix16_r, (reent, s),
-	struct _reent *reent _AND
-	_CONST char *s)
+_atosfix16_r (struct _reent *reent,
+	const char *s)
 {
   return _strtosfix16_r (reent, s, NULL);
 }
 
 #ifndef _REENT_ONLY
 __int16_t
-_DEFUN (atosfix16, (s),
-	_CONST char *s)
+atosfix16 (const char *s)
 {
   return strtosfix16 (s, NULL);
 }

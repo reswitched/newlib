@@ -24,6 +24,7 @@ details. */
 #include "tls_pbuf.h"
 #include "devices.h"
 #include "ldap.h"
+#include <aio.h>
 
 #define _COMPILING_NEWLIB
 #include <dirent.h>
@@ -1243,16 +1244,27 @@ fhandler_disk_file::link (const char *newpath)
 	__seterrno_from_nt_status (status);
       return -1;
     }
-  else if (pc.file_attributes () & FILE_ATTRIBUTE_TEMPORARY)
+  else if ((pc.file_attributes () & O_TMPFILE_FILE_ATTRS)
+	   == O_TMPFILE_FILE_ATTRS)
     {
-      /* If the original file has been opened with O_TMPFILE the file has
-	 FILE_ATTRIBUTE_TEMPORARY set.  After a successful hardlink the
-	 file is not temporary anymore in the usual sense.  So we remove
-	 FILE_ATTRIBUTE_TEMPORARY here, even if this makes the original file
-	 visible in directory enumeration. */
+      /* An O_TMPFILE file has FILE_ATTRIBUTE_TEMPORARY and
+	 FILE_ATTRIBUTE_HIDDEN set.  After a successful hardlink the file is
+	 not temporary anymore in the usual sense.  So we remove these
+	 attributes here.
+
+	 Note that we don't create a reopen attribute for the original
+	 link but rather a normal attribute for the just created link.
+	 The reason is a curious behaviour of Windows:  If we remove the
+	 O_TMPFILE attributes on the original link, the new link will not
+	 show up in file system listings (not even native ones from , e.g.,
+	 `cmd /c dir'), long after the original link has been closed and
+	 removed.  The file and its metadata will be kept in memory only
+	 as long as Windows sees fit.  By opening the new link, we request
+	 the attribute changes on the new link, so after closing it Windows
+	 will have an increased interest to write back the metadata. */
       OBJECT_ATTRIBUTES attr;
       status = NtOpenFile (&fh, FILE_WRITE_ATTRIBUTES,
-			   pc.init_reopen_attr (attr, fh), &io,
+			   newpc.get_object_attr (attr, sec_none_nih), &io,
 			   FILE_SHARE_VALID_FLAGS, FILE_OPEN_FOR_BACKUP_INTENT);
       if (!NT_SUCCESS (status))
 	debug_printf ("Opening for removing TEMPORARY attrib failed, "
@@ -1263,8 +1275,7 @@ fhandler_disk_file::link (const char *newpath)
 
 	  fbi.CreationTime.QuadPart = fbi.LastAccessTime.QuadPart
 	  = fbi.LastWriteTime.QuadPart = fbi.ChangeTime.QuadPart = 0LL;
-	  fbi.FileAttributes = (pc.file_attributes ()
-				& ~FILE_ATTRIBUTE_TEMPORARY)
+	  fbi.FileAttributes = (pc.file_attributes () & ~O_TMPFILE_FILE_ATTRS)
 			       ?: FILE_ATTRIBUTE_NORMAL;
 	  status = NtSetInformationFile (fh, &io, &fbi, sizeof fbi,
 					 FileBasicInformation);
@@ -1314,8 +1325,8 @@ fhandler_base::utimens_fs (const struct timespec *tvp)
     tmp[1] = tmp[0] = timeofday;
   else
     {
-      if ((tvp[0].tv_nsec < UTIME_NOW || tvp[0].tv_nsec > 999999999L)
-	  || (tvp[1].tv_nsec < UTIME_NOW || tvp[1].tv_nsec > 999999999L))
+      if ((tvp[0].tv_nsec < UTIME_NOW || tvp[0].tv_nsec >= NSPERSEC)
+	  || (tvp[1].tv_nsec < UTIME_NOW || tvp[1].tv_nsec >= NSPERSEC))
 	{
 	  if (closeit)
 	    close_fs ();
@@ -1501,39 +1512,48 @@ fhandler_base::open_fs (int flags, mode_t mode)
    parameter to the latter. */
 
 int
-fhandler_disk_file::prw_open (bool write)
+fhandler_disk_file::prw_open (bool write, void *aio)
 {
   NTSTATUS status;
   IO_STATUS_BLOCK io;
   OBJECT_ATTRIBUTES attr;
+  ULONG options = get_options ();
+
+  /* If async i/o is intended, turn off the default synchronous operation */
+  if (aio)
+    options &= ~FILE_SYNCHRONOUS_IO_NONALERT;
 
   /* First try to open with the original access mask */
   ACCESS_MASK access = get_access ();
   status = NtOpenFile (&prw_handle, access,
 		       pc.init_reopen_attr (attr, get_handle ()), &io,
-		       FILE_SHARE_VALID_FLAGS, get_options ());
+		       FILE_SHARE_VALID_FLAGS, options);
   if (status == STATUS_ACCESS_DENIED)
     {
       /* If we get an access denied, chmod has been called.  Try again
 	 with just the required rights to perform the called function. */
       access &= write ? ~GENERIC_READ : ~GENERIC_WRITE;
       status = NtOpenFile (&prw_handle, access, &attr, &io,
-			   FILE_SHARE_VALID_FLAGS, get_options ());
+			   FILE_SHARE_VALID_FLAGS, options);
     }
   debug_printf ("%y = NtOpenFile (%p, %y, %S, io, %y, %y)",
 		status, prw_handle, access, pc.get_nt_native_path (),
-		FILE_SHARE_VALID_FLAGS, get_options ());
+		FILE_SHARE_VALID_FLAGS, options);
   if (!NT_SUCCESS (status))
     {
       __seterrno_from_nt_status (status);
       return -1;
     }
+
+  /* record prw_handle's asyncness for subsequent pread/pwrite operations */
+  prw_handle_isasync = !!aio;
   return 0;
 }
 
 ssize_t __reg3
-fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
+fhandler_disk_file::pread (void *buf, size_t count, off_t offset, void *aio)
 {
+  struct aiocb *aiocb = (struct aiocb *) aio;
   ssize_t res;
 
   if ((get_flags () & O_ACCMODE) == O_WRONLY)
@@ -1550,10 +1570,16 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
       NTSTATUS status;
       IO_STATUS_BLOCK io;
       LARGE_INTEGER off = { QuadPart:offset };
+      HANDLE evt = aio ? (HANDLE) aiocb->aio_wincb.event : NULL;
+      PIO_STATUS_BLOCK pio = aio ? (PIO_STATUS_BLOCK) &aiocb->aio_wincb : &io;
 
-      if (!prw_handle && prw_open (false))
+      /* If existing prw_handle asyncness doesn't match this call's, re-open */
+      if (prw_handle && (prw_handle_isasync != !!aio))
+	NtClose (prw_handle), prw_handle = NULL;
+
+      if (!prw_handle && prw_open (false, aio))
 	goto non_atomic;
-      status = NtReadFile (prw_handle, NULL, NULL, NULL, &io, buf, count,
+      status = NtReadFile (prw_handle, evt, NULL, NULL, pio, buf, count,
 			   &off, NULL);
       if (status == STATUS_END_OF_FILE)
 	res = 0;
@@ -1574,11 +1600,12 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
 	      switch (mmap_is_attached_or_noreserve (buf, count))
 		{
 		case MMAP_NORESERVE_COMMITED:
-		  status = NtReadFile (prw_handle, NULL, NULL, NULL, &io,
+                  status = NtReadFile (prw_handle, evt, NULL, NULL, pio,
 				       buf, count, &off, NULL);
 		  if (NT_SUCCESS (status))
 		    {
-		      res = io.Information;
+		      res = aio ? (ssize_t) aiocb->aio_wincb.info
+                                : io.Information;
 		      goto out;
 		    }
 		  break;
@@ -1592,7 +1619,10 @@ fhandler_disk_file::pread (void *buf, size_t count, off_t offset)
 	  return -1;
 	}
       else
-	res = io.Information;
+	{
+	  res = aio ? (ssize_t) aiocb->aio_wincb.info : io.Information;
+	  goto out;
+	}
     }
   else
     {
@@ -1610,15 +1640,26 @@ non_atomic:
 	  else
 	    res = -1;
 	}
+
+      /* If this was a disallowed async request, simulate its conclusion */
+      if (aio)
+	{
+	  aiocb->aio_rbytes = res;
+	  aiocb->aio_errno = res == -1 ? get_errno () : 0;
+	  SetEvent ((HANDLE) aiocb->aio_wincb.event);
+	}
     }
 out:
-  debug_printf ("%d = pread(%p, %ld, %D)\n", res, buf, count, offset);
+  debug_printf ("%d = pread(%p, %ld, %D, %p)\n", res, buf, count, offset, aio);
   return res;
 }
 
 ssize_t __reg3
-fhandler_disk_file::pwrite (void *buf, size_t count, off_t offset)
+fhandler_disk_file::pwrite (void *buf, size_t count, off_t offset, void *aio)
 {
+  struct aiocb *aiocb = (struct aiocb *) aio;
+  ssize_t res;
+
   if ((get_flags () & O_ACCMODE) == O_RDONLY)
     {
       set_errno (EBADF);
@@ -1632,32 +1673,49 @@ fhandler_disk_file::pwrite (void *buf, size_t count, off_t offset)
       NTSTATUS status;
       IO_STATUS_BLOCK io;
       LARGE_INTEGER off = { QuadPart:offset };
+      HANDLE evt = aio ? (HANDLE) aiocb->aio_wincb.event : NULL;
+      PIO_STATUS_BLOCK pio = aio ? (PIO_STATUS_BLOCK) &aiocb->aio_wincb : &io;
 
-      if (!prw_handle && prw_open (true))
+      /* If existing prw_handle asyncness doesn't match this call's, re-open */
+      if (prw_handle && (prw_handle_isasync != !!aio))
+        NtClose (prw_handle), prw_handle = NULL;
+
+      if (!prw_handle && prw_open (true, aio))
 	goto non_atomic;
-      status = NtWriteFile (prw_handle, NULL, NULL, NULL, &io, buf, count,
+      status = NtWriteFile (prw_handle, evt, NULL, NULL, pio, buf, count,
 			    &off, NULL);
       if (!NT_SUCCESS (status))
 	{
 	  __seterrno_from_nt_status (status);
 	  return -1;
 	}
-      return io.Information;
+      res = aio ? (ssize_t) aiocb->aio_wincb.info : io.Information;
+      goto out;
     }
-
-non_atomic:
-  /* Text mode stays slow and non-atomic. */
-  int res;
-  off_t curpos = lseek (0, SEEK_CUR);
-  if (curpos < 0 || lseek (offset, SEEK_SET) < 0)
-    res = curpos;
   else
     {
-      res = (ssize_t) write (buf, count);
-      if (lseek (curpos, SEEK_SET) < 0)
-	res = -1;
+non_atomic:
+      /* Text mode stays slow and non-atomic. */
+      off_t curpos = lseek (0, SEEK_CUR);
+      if (curpos < 0 || lseek (offset, SEEK_SET) < 0)
+	res = curpos;
+      else
+	{
+	  res = (ssize_t) write (buf, count);
+	  if (lseek (curpos, SEEK_SET) < 0)
+	    res = -1;
+	}
+
+      /* If this was a disallowed async request, simulate its conclusion */
+      if (aio)
+	{
+	  aiocb->aio_rbytes = res;
+	  aiocb->aio_errno = res == -1 ? get_errno () : 0;
+	  SetEvent ((HANDLE) aiocb->aio_wincb.event);
+	}
     }
-  debug_printf ("%d = pwrite(%p, %ld, %D)\n", res, buf, count, offset);
+out:
+  debug_printf ("%d = pwrite(%p, %ld, %D, %p)\n", res, buf, count, offset, aio);
   return res;
 }
 
@@ -1966,7 +2024,7 @@ readdir_get_ino (const char *path, bool dot_dot)
 				      pc.get_object_attr (attr, sec_none_nih),
 				      &io, FILE_SHARE_VALID_FLAGS,
 				      FILE_OPEN_FOR_BACKUP_INTENT
-				      | (pc.is_rep_symlink ()
+				      | (pc.is_known_reparse_point ()
 				      ? FILE_OPEN_REPARSE_POINT : 0)))
 	  )
     {
@@ -2096,7 +2154,6 @@ fhandler_disk_file::readdir (DIR *dir, dirent *de)
 
   /* d_cachepos always refers to the next cache entry to use.  If it's 0
      we must reload the cache. */
-restart:
   FileAttributes = 0;
   if (d_cachepos (dir) == 0)
     {
@@ -2211,10 +2268,6 @@ go_ahead:
 	  FileAttributes =
 		((PFILE_BOTH_DIR_INFORMATION) buf)->FileAttributes;
 	}
-      /* We don't show O_TMPFILE files in the filesystem.  This is a kludge,
-	 so we may end up removing this snippet again. */
-      if (FileAttributes & FILE_ATTRIBUTE_TEMPORARY)
-	goto restart;
       RtlInitCountedUnicodeString (&fname, FileName, FileNameLength);
       d_mounts (dir)->check_mount (&fname);
       if (de->d_ino == 0 && (dir->__flags & dirent_set_d_ino))
@@ -2351,7 +2404,7 @@ fhandler_disk_file::closedir (DIR *dir)
 }
 
 fhandler_cygdrive::fhandler_cygdrive () :
-  fhandler_disk_file (), ndrives (0), pdrive (NULL)
+  fhandler_disk_file ()
 {
 }
 
@@ -2370,13 +2423,6 @@ fhandler_cygdrive::open (int flags, mode_t mode)
     }
   /* Open a fake handle to \\Device\\Null */
   return open_null (flags);
-}
-
-void
-fhandler_cygdrive::set_drives ()
-{
-  pdrive = pdrive_buf;
-  ndrives = GetLogicalDriveStrings (sizeof pdrive_buf, pdrive_buf) / DRVSZ;
 }
 
 int
@@ -2401,14 +2447,28 @@ fhandler_cygdrive::fstatvfs (struct statvfs *sfs)
   return 0;
 }
 
+#define MAX_DRIVE_BUF_LEN	(sizeof ("x:\\") * 26 + 2)
+
+struct __DIR_drives
+{
+  char *pdrive;
+  char  pbuf[MAX_DRIVE_BUF_LEN];
+};
+
+#define d_drives(d)	((__DIR_drives *) (d)->__d_internal)
+
 DIR *
 fhandler_cygdrive::opendir (int fd)
 {
   DIR *dir;
 
   dir = fhandler_disk_file::opendir (fd);
-  if (dir && !ndrives)
-    set_drives ();
+  if (dir)
+    {
+      dir->__d_internal = (uintptr_t) new __DIR_drives;
+      GetLogicalDriveStrings (MAX_DRIVE_BUF_LEN, d_drives(dir)->pbuf);
+      d_drives(dir)->pdrive = d_drives(dir)->pbuf;
+    }
 
   return dir;
 }
@@ -2420,7 +2480,7 @@ fhandler_cygdrive::readdir (DIR *dir, dirent *de)
 
   while (true)
     {
-      if (!pdrive || !*pdrive)
+      if (!d_drives(dir)->pdrive || !*d_drives(dir)->pdrive)
 	{
 	  if (!(dir->__flags & dirent_saw_dot))
 	    {
@@ -2430,7 +2490,7 @@ fhandler_cygdrive::readdir (DIR *dir, dirent *de)
 	    }
 	  return ENMFILE;
 	}
-      disk_type dt = get_disk_type ((drive[0] = *pdrive, drive));
+      disk_type dt = get_disk_type ((drive[0] = *d_drives(dir)->pdrive, drive));
       if (dt == DT_SHARE_SMB)
 	{
 	  /* Calling NetUseGetInfo on SMB drives allows to fetch the
@@ -2452,16 +2512,16 @@ fhandler_cygdrive::readdir (DIR *dir, dirent *de)
 	    }
 	}
       else if (dt != DT_FLOPPY
-	       && GetFileAttributes (pdrive) != INVALID_FILE_ATTRIBUTES)
+	       && GetFileAttributes (d_drives(dir)->pdrive) != INVALID_FILE_ATTRIBUTES)
 	break;
-      pdrive = strchr (pdrive, '\0') + 1;
+      d_drives(dir)->pdrive = strchr (d_drives(dir)->pdrive, '\0') + 1;
     }
-  *de->d_name = cyg_tolower (*pdrive);
+  *de->d_name = cyg_tolower (*d_drives(dir)->pdrive);
   de->d_name[1] = '\0';
   user_shared->warned_msdos = true;
-  de->d_ino = readdir_get_ino (pdrive, false);
+  de->d_ino = readdir_get_ino (d_drives(dir)->pdrive, false);
   dir->__d_position++;
-  pdrive = strchr (pdrive, '\0') + 1;
+  d_drives(dir)->pdrive = strchr (d_drives(dir)->pdrive, '\0') + 1;
   syscall_printf ("%p = readdir (%p) (%s)", &de, dir, de->d_name);
   return 0;
 }
@@ -2469,13 +2529,13 @@ fhandler_cygdrive::readdir (DIR *dir, dirent *de)
 void
 fhandler_cygdrive::rewinddir (DIR *dir)
 {
-  pdrive = pdrive_buf;
+  d_drives(dir)->pdrive = d_drives(dir)->pbuf;
   dir->__d_position = 0;
 }
 
 int
 fhandler_cygdrive::closedir (DIR *dir)
 {
-  pdrive = pdrive_buf;
+  delete d_drives(dir);
   return 0;
 }

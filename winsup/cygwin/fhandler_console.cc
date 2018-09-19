@@ -759,7 +759,7 @@ dev_console::scroll_buffer (HANDLE h, int x1, int y1, int x2, int y2, int xn, in
   SMALL_RECT sr1, sr2;
   CHAR_INFO fill;
   COORD dest;
-  fill.Char.AsciiChar = ' ';
+  fill.Char.UnicodeChar = L' ';
   fill.Attributes = current_win32_attr;
 
   fillin (h);
@@ -775,7 +775,7 @@ dev_console::scroll_buffer (HANDLE h, int x1, int y1, int x2, int y2, int xn, in
     sr1.Bottom = sr2.Bottom;
   dest.X = xn >= 0 ? xn : dwWinSize.X - 1;
   dest.Y = yn >= 0 ? yn : b.srWindow.Bottom;
-  ScrollConsoleScreenBuffer (h, &sr1, &sr2, dest, &fill);
+  ScrollConsoleScreenBufferW (h, &sr1, &sr2, dest, &fill);
 }
 
 inline void
@@ -822,7 +822,7 @@ fhandler_console::open (int flags, mode_t)
   set_output_handle (NULL);
 
   /* Open the input handle as handle_ */
-  h = CreateFile ("CONIN$", GENERIC_READ | GENERIC_WRITE,
+  h = CreateFileW (L"CONIN$", GENERIC_READ | GENERIC_WRITE,
 		  FILE_SHARE_READ | FILE_SHARE_WRITE, &sec_none,
 		  OPEN_EXISTING, 0, 0);
 
@@ -833,7 +833,7 @@ fhandler_console::open (int flags, mode_t)
     }
   set_io_handle (h);
 
-  h = CreateFile ("CONOUT$", GENERIC_READ | GENERIC_WRITE,
+  h = CreateFileW (L"CONOUT$", GENERIC_READ | GENERIC_WRITE,
 		  FILE_SHARE_READ | FILE_SHARE_WRITE, &sec_none,
 		  OPEN_EXISTING, 0, 0);
 
@@ -1226,9 +1226,9 @@ dev_console::scroll_window (HANDLE h, int x1, int y1, int x2, int y2)
       br.Right = b.dwSize.X - 1;
       br.Bottom = b.dwSize.Y - 1;
       dest.X = dest.Y = 0;
-      fill.Char.AsciiChar = ' ';
+      fill.Char.UnicodeChar = L' ';
       fill.Attributes = current_win32_attr;
-      ScrollConsoleScreenBuffer (h, &br, NULL, dest, &fill);
+      ScrollConsoleScreenBufferW (h, &br, NULL, dest, &fill);
       /* Since we're moving the console buffer under the console window
 	 we only have to move the console window if the user scrolled the
 	 window upwards.  The number of lines is the distance to the
@@ -1971,15 +1971,108 @@ bad_escape:
     }
 }
 
-/* This gets called when we found an invalid input character.  We just
-   print a half filled square (UTF 0x2592).  We have no chance to figure
-   out the "meaning" of the input char anyway. */
+#define NUM_REPLACEMENT_CHARS	3
+
+static const wchar_t replacement_char[NUM_REPLACEMENT_CHARS] =
+{
+  0xfffd, /* REPLACEMENT CHARACTER */
+  0x25a1, /* WHITE SQUARE */
+  0x2592  /* MEDIUM SHADE */
+};
+/* nFont member is always 0 so we have to use the facename. */
+static WCHAR cons_facename[LF_FACESIZE];
+static WCHAR rp_char;
+static NO_COPY HDC cdc;
+
+static int CALLBACK
+enum_proc (const LOGFONTW *lf, const TEXTMETRICW *tm,
+	   DWORD FontType, LPARAM lParam)
+{
+  int *done = (int *) lParam;
+  *done = 1;
+  return 0;
+}
+
+static void
+check_font (HANDLE hdl)
+{
+  CONSOLE_FONT_INFOEX cfi;
+  LOGFONTW lf;
+
+  cfi.cbSize = sizeof cfi;
+  if (!GetCurrentConsoleFontEx (hdl, 0, &cfi))
+    return;
+  /* Switched font? */
+  if (wcscmp (cons_facename, cfi.FaceName) == 0)
+    return;
+  if (!cdc && !(cdc = GetDC (GetConsoleWindow ())))
+    return;
+  /* Some FaceNames like DejaVu Sans Mono are sometimes returned with stray
+     trailing chars.  Fix it. */
+  lf.lfCharSet = DEFAULT_CHARSET;
+  lf.lfPitchAndFamily = FIXED_PITCH | FF_DONTCARE;
+  wchar_t *cp = wcpcpy (lf.lfFaceName, cfi.FaceName) - 1;
+  int done = 0;
+  do
+    {
+      EnumFontFamiliesExW (cdc, &lf, enum_proc, (LPARAM) &done, 0);
+      if (!done)
+	*cp-- = L'\0';
+    }
+  while (!done && cp >= lf.lfFaceName);
+  /* What, really?  No recognizable font? */
+  if (!done)
+    {
+      rp_char = L'?';
+      return;
+    }
+  /* Yes.  Check for the best replacement char. */
+  HFONT f = CreateFontW (0, 0, 0, 0,
+			 cfi.FontWeight, FALSE, FALSE, FALSE,
+			 DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+			 CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
+			 FIXED_PITCH | FF_DONTCARE, lf.lfFaceName);
+  if (!f)
+    return;
+
+  HFONT old_f = (HFONT) SelectObject(cdc, f);
+  if (old_f)
+    {
+      WORD glyph_idx[NUM_REPLACEMENT_CHARS];
+
+      if (GetGlyphIndicesW (cdc, replacement_char,
+			    NUM_REPLACEMENT_CHARS, glyph_idx,
+			    GGI_MARK_NONEXISTING_GLYPHS) != GDI_ERROR)
+	{
+	  int i;
+
+	  for (i = 0; i < NUM_REPLACEMENT_CHARS; ++i)
+	    if (glyph_idx[i] != 0xffff)
+	      break;
+	  if (i == NUM_REPLACEMENT_CHARS)
+	    i = 0;
+	  rp_char = replacement_char[i];
+	  /* Note that we copy the original name returned by
+	     GetCurrentConsoleFontEx, even if it was broken.
+	     This allows an early return, rather than to store
+	     the fixed name and then having to enum font families
+	     all over again. */
+	  wcscpy (cons_facename, cfi.FaceName);
+	}
+      SelectObject (cdc, old_f);
+    }
+  DeleteObject (f);
+}
+
+/* This gets called when we found an invalid input character.
+   Print one of the above Unicode chars as replacement char. */
 inline void
 fhandler_console::write_replacement_char ()
 {
-  static const wchar_t replacement_char = 0x2592; /* Half filled square */
+  check_font (get_output_handle ());
+
   DWORD done;
-  WriteConsoleW (get_output_handle (), &replacement_char, 1, &done, 0);
+  WriteConsoleW (get_output_handle (), &rp_char, 1, &done, 0);
 }
 
 const unsigned char *

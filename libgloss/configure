@@ -710,6 +710,7 @@ spu
 tic6x
 iq2000
 or1k
+nios2
 libnosys'
 
 # Initialize some variables set by options.
@@ -2584,6 +2585,10 @@ case "${target}" in
 	;;
   or1k-*-* | or1knd-*-* )
 	subdirs="$subdirs or1k"
+
+	;;
+  nios2-*-*)
+	subdirs="$subdirs nios2"
 
 	;;
 esac

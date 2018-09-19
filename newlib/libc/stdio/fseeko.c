@@ -93,13 +93,12 @@ Supporting OS subroutines required: <<close>>, <<fstat>>, <<isatty>>,
  */
 
 int
-_DEFUN(_fseeko_r, (ptr, fp, offset, whence),
-       struct _reent *ptr _AND
-       register FILE *fp  _AND
-       _off_t offset      _AND
+_fseeko_r (struct _reent *ptr,
+       register FILE *fp,
+       _off_t offset,
        int whence)
 {
-  _fpos_t _EXFNPTR(seekfn, (struct _reent *, _PTR, _fpos_t, int));
+  _fpos_t (*seekfn) (struct _reent *, void *, _fpos_t, int);
   _fpos_t target;
   _fpos_t curoff = 0;
   size_t n;
@@ -359,9 +358,8 @@ dumb:
 #ifndef _REENT_ONLY
 
 int
-_DEFUN(fseeko, (fp, offset, whence),
-       register FILE *fp _AND
-       _off_t offset     _AND
+fseeko (register FILE *fp,
+       _off_t offset,
        int whence)
 {
   return _fseeko_r (_REENT, fp, offset, whence);

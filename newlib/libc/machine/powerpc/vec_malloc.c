@@ -95,9 +95,8 @@ Supporting OS subroutines required: <<sbrk>>.  */
 
 #ifndef _REENT_ONLY
 
-_PTR
-_DEFUN (vec_malloc, (nbytes),
-	size_t nbytes)		/* get a block */
+void *
+vec_malloc (size_t nbytes)		/* get a block */
 {
   return _memalign_r (_REENT, 16, nbytes);
 }

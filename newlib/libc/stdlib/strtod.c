@@ -137,7 +137,6 @@ THIS SOFTWARE.
 #include <string.h>
 #include "mprec.h"
 #include "gdtoa.h"
-#include "gd_qnan.h"
 #include "../locale/setlocale.h"
 
 /* #ifndef NO_FENV_H */
@@ -152,7 +151,7 @@ THIS SOFTWARE.
 #undef tinytens
 /* The factor of 2^106 in tinytens[4] helps us avoid setting the underflow */
 /* flag unnecessarily.  It leads to a song and dance at the end of strtod. */
-static _CONST double tinytens[] = { 1e-16, 1e-32,
+static const double tinytens[] = { 1e-16, 1e-32,
 #ifdef _DOUBLE_IS_32BITS
 				    0.0, 0.0, 0.0
 #else
@@ -172,10 +171,17 @@ static _CONST double tinytens[] = { 1e-16, 1e-32,
 #define Rounding Flt_Rounds
 #endif
 
+#ifdef IEEE_MC68k
+#define _0 0
+#define _1 1
+#else
+#define _0 1
+#define _1 0
+#endif
+
 #ifdef Avoid_Underflow /*{*/
  static double
-_DEFUN (sulp, (x, scale),
-       	U x _AND
+sulp (U x,
 	int scale)
 {
         U u;
@@ -197,10 +203,9 @@ _DEFUN (sulp, (x, scale),
 #ifndef NO_HEX_FP
 
 static void
-_DEFUN (ULtod, (L, bits, exp, k),
-	__ULong *L _AND
-	__ULong *bits _AND
-	Long exp _AND
+ULtod (__ULong *L,
+	__ULong *bits,
+	Long exp,
 	int k)
 {
 	switch(k & STRTOG_Retmask) {
@@ -243,7 +248,7 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 #endif
 	int bb2, bb5, bbe, bd2, bd5, bbbits, bs2, c, decpt, dsign,
 		 e, e1, esign, i, j, k, nd, nd0, nf, nz, nz0, sign;
-	_CONST char *s, *s0, *s1;
+	const char *s, *s0, *s1;
 	double aadj, adj;
 	U aadj1, rv, rv0;
 	Long L;
@@ -258,8 +263,8 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 #ifdef Honor_FLT_ROUNDS
 	int rounding;
 #endif
-	struct lconv *lconv = __localeconv_l (loc);
-	int dec_len = strlen (lconv->decimal_point);
+	const char *decimal_point = __get_numeric_locale(loc)->decimal_point;
+	int dec_len = strlen (decimal_point);
 
 	delta = bs = bd = NULL;
 	sign = nz0 = nz = decpt = 0;
@@ -288,7 +293,7 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 	if (*s == '0') {
 #ifndef NO_HEX_FP
 		{
-		static _CONST FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
+		static const FPI fpi = { 53, 1-1023-53+1, 2046-1023-53+1, 1, SI };
 		Long exp;
 		__ULong bits[2];
 		switch(s[1]) {
@@ -339,7 +344,7 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 		else
 			z = 10*z + c - '0';
 	nd0 = nd;
-	if (strncmp (s, lconv->decimal_point, dec_len) == 0)
+	if (strncmp (s, decimal_point, dec_len) == 0)
 		{
 		decpt = 1;
 		c = *(s += dec_len);
@@ -415,7 +420,7 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 #ifdef INFNAN_CHECK
 			/* Check for Nan and Infinity */
 			__ULong bits[2];
-			static _CONST FPI fpinan =	/* only 52 explicit bits */
+			static const FPI fpinan =	/* only 52 explicit bits */
 				{ 52, 1-1023-53+1, 2046-1023-53+1, 1, SI };
 			if (!decpt)
 			 switch(c) {
@@ -446,10 +451,7 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 						}
 					else {
 #endif
-						dword0(rv) = NAN_WORD0;
-#ifndef _DOUBLE_IS_32BITS
-						dword1(rv) = NAN_WORD1;
-#endif /*!_DOUBLE_IS_32BITS*/
+						dval(rv) = nan ("");
 #ifndef No_Hex_NaN
 						}
 #endif
@@ -1188,7 +1190,16 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 #endif
 		if (y == z) {
 			/* Can we stop now? */
+#ifndef _DOUBLE_IS_32BITS
+			/* If FE_INVALID floating point exceptions are
+			   enabled, a conversion to a 32 bit value is
+			   dangerous.  A positive double value can result
+			   in a negative 32 bit int, thus raising SIGFPE.
+			   To avoid this, always convert into 64 bit here. */
+			__int64_t L = (__int64_t)aadj;
+#else
 			L = (Long)aadj;
+#endif
 			aadj -= L;
 			/* The tolerances below are conservative. */
 			if (dsign || dword1(rv) || dword0(rv) & Bndry_mask) {
@@ -1252,9 +1263,8 @@ _strtod_l (struct _reent *ptr, const char *__restrict s00, char **__restrict se,
 }
 
 double
-_DEFUN (_strtod_r, (ptr, s00, se),
-	struct _reent *ptr _AND
-	_CONST char *__restrict s00 _AND
+_strtod_r (struct _reent *ptr,
+	const char *__restrict s00,
 	char **__restrict se)
 {
   return _strtod_l (ptr, s00, se, __get_current_locale ());
@@ -1269,8 +1279,7 @@ strtod_l (const char *__restrict s00, char **__restrict se, locale_t loc)
 }
 
 double
-_DEFUN (strtod, (s00, se),
-	_CONST char *__restrict s00 _AND char **__restrict se)
+strtod (const char *__restrict s00, char **__restrict se)
 {
   return _strtod_l (_REENT, s00, se, __get_current_locale ());
 }
@@ -1280,7 +1289,7 @@ strtof_l (const char *__restrict s00, char **__restrict se, locale_t loc)
 {
   double val = _strtod_l (_REENT, s00, se, loc);
   if (isnan (val))
-    return nanf (NULL);
+    return signbit (val) ? -nanf ("") : nanf ("");
   float retval = (float) val;
 #ifndef NO_ERRNO
   if (isinf (retval) && !isinf (val))
@@ -1290,13 +1299,12 @@ strtof_l (const char *__restrict s00, char **__restrict se, locale_t loc)
 }
 
 float
-_DEFUN (strtof, (s00, se),
-	_CONST char *__restrict s00 _AND
+strtof (const char *__restrict s00,
 	char **__restrict se)
 {
   double val = _strtod_l (_REENT, s00, se, __get_current_locale ());
   if (isnan (val))
-    return nanf (NULL);
+    return signbit (val) ? -nanf ("") : nanf ("");
   float retval = (float) val;
 #ifndef NO_ERRNO
   if (isinf (retval) && !isinf (val))

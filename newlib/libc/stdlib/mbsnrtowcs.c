@@ -71,12 +71,11 @@ PORTABILITY
 #include <errno.h>
 
 size_t
-_DEFUN (_mbsnrtowcs_r, (r, dst, src, nms, len, ps), 
-	struct _reent *r _AND
-	wchar_t *dst _AND
-	const char **src _AND
-	size_t nms _AND
-	size_t len _AND
+_mbsnrtowcs_r (struct _reent *r,
+	wchar_t *dst,
+	const char **src,
+	size_t nms,
+	size_t len,
 	mbstate_t *ps)
 {
   wchar_t *ptr = dst;
@@ -137,11 +136,10 @@ _DEFUN (_mbsnrtowcs_r, (r, dst, src, nms, len, ps),
 
 #ifndef _REENT_ONLY
 size_t
-_DEFUN (mbsnrtowcs, (dst, src, nms, len, ps),
-	wchar_t *__restrict dst _AND
-	const char **__restrict src _AND
-	size_t nms _AND
-	size_t len _AND
+mbsnrtowcs (wchar_t *__restrict dst,
+	const char **__restrict src,
+	size_t nms,
+	size_t len,
 	mbstate_t *__restrict ps)
 {
   return _mbsnrtowcs_r (_REENT, dst, src, nms, len, ps);

@@ -74,15 +74,16 @@ Cygwin additionally supports locales from the file
 (<<"">> is also accepted; if given, the settings are read from the
 corresponding LC_* environment variables and $LANG according to POSIX rules.)
 
-This implementation also supports the modifier <<"cjknarrow">>, which
-affects how the functions <<wcwidth>> and <<wcswidth>> handle characters
-from the "CJK Ambiguous Width" category of characters described at
-http://www.unicode.org/reports/tr11/#Ambiguous. These characters have a width
-of 1 for singlebyte charsets and a width of 2 for multibyte charsets
-other than UTF-8. For UTF-8, their width depends on the language specifier:
+This implementation also supports the modifiers <<"cjknarrow">> and
+<<"cjkwide">>, which affect how the functions <<wcwidth>> and <<wcswidth>>
+handle characters from the "CJK Ambiguous Width" category of characters
+described at http://www.unicode.org/reports/tr11/#Ambiguous.
+These characters have a width of 1 for singlebyte charsets and a width of 2
+for multibyte charsets other than UTF-8.
+For UTF-8, their width depends on the language specifier:
 it is 2 for <<"zh">> (Chinese), <<"ja">> (Japanese), and <<"ko">> (Korean),
-and 1 for everything else. Specifying <<"cjknarrow">> forces a width of 1,
-independent of charset and language.
+and 1 for everything else. Specifying <<"cjknarrow">> or <<"cjkwide">>
+forces a width of 1 or 2, respectively, independent of charset and language.
 
 If you use <<NULL>> as the <[locale]> argument, <<setlocale>> returns a
 pointer to the string representing the current locale.  The acceptable
@@ -289,10 +290,9 @@ static char *currentlocale (void);
 #endif /* _MB_CAPABLE */
 
 char *
-_DEFUN(_setlocale_r, (p, category, locale),
-       struct _reent *p _AND
-       int category _AND
-       _CONST char *locale)
+_setlocale_r (struct _reent *p,
+       int category,
+       const char *locale)
 {
 #ifndef _MB_CAPABLE
   if (locale)
@@ -481,6 +481,7 @@ __loadlocale (struct __locale_t *loc, int category, const char *new_locale)
   wctomb_p l_wctomb;
   mbtowc_p l_mbtowc;
   int cjknarrow = 0;
+  int cjkwide = 0;
 
   /* Avoid doing everything twice if nothing has changed.
 
@@ -594,11 +595,13 @@ restart:
   if (c && c[0] == '@')
     {
       /* Modifier */
-      /* Only one modifier is recognized right now.  "cjknarrow" is used
-         to modify the behaviour of wcwidth() for East Asian languages.
+      /* Modifiers "cjknarrow" or "cjkwide" are recognized to modify the
+         behaviour of wcwidth() and wcswidth() for East Asian languages.
          For details see the comment at the end of this function. */
       if (!strcmp (c + 1, "cjknarrow"))
 	cjknarrow = 1;
+      else if (!strcmp (c + 1, "cjkwide"))
+	cjkwide = 1;
     }
   /* We only support this subset of charsets. */
   switch (charset[0])
@@ -895,12 +898,15 @@ restart:
          single-byte charsets, and double width for multi-byte charsets
          other than UTF-8. For UTF-8, use double width for the East Asian
          languages ("ja", "ko", "zh"), and single width for everything else.
-         Single width can also be forced with the "@cjknarrow" modifier. */
-      loc->cjk_lang = !cjknarrow && mbc_max > 1
-		      && (charset[0] != 'U'
-			  || strncmp (locale, "ja", 2) == 0
-			  || strncmp (locale, "ko", 2) == 0
-			  || strncmp (locale, "zh", 2) == 0);
+         Single width can also be forced with the "@cjknarrow" modifier.
+         Double width can also be forced with the "@cjkwide" modifier.
+       */
+      loc->cjk_lang = cjkwide ||
+		      (!cjknarrow && mbc_max > 1
+		       && (charset[0] != 'U'
+			   || strncmp (locale, "ja", 2) == 0
+			   || strncmp (locale, "ko", 2) == 0
+			   || strncmp (locale, "zh", 2) == 0));
 #ifdef __HAVE_LOCALE_INFO__
       ret = __ctype_load_locale (loc, locale, (void *) l_wctomb, charset,
 				 mbc_max);
@@ -966,7 +972,7 @@ __get_locale_env (struct _reent *p, int category)
 #endif /* _MB_CAPABLE */
 
 int
-_DEFUN_VOID (__locale_mb_cur_max)
+__locale_mb_cur_max (void)
 {
 #ifdef __HAVE_LOCALE_INFO__
   return __get_current_ctype_locale ()->mb_cur_max[0];
@@ -975,6 +981,7 @@ _DEFUN_VOID (__locale_mb_cur_max)
 #endif
 }
 
+#ifdef __HAVE_LOCALE_INFO__
 const char *
 __locale_ctype_ptr_l (struct __locale_t *locale)
 {
@@ -986,13 +993,13 @@ __locale_ctype_ptr (void)
 {
   return __get_current_locale ()->ctype_ptr;
 }
+#endif /* __HAVE_LOCALE_INFO__ */
 
 #ifndef _REENT_ONLY
 
 char *
-_DEFUN (setlocale, (category, locale),
-	int category _AND
-	_CONST char *locale)
+setlocale (int category,
+	const char *locale)
 {
   return _setlocale_r (_REENT, category, locale);
 }

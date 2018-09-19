@@ -31,8 +31,7 @@ QUICKREF
 #include <strings.h>
 
 char *
-_DEFUN (rindex, (s, c),
-	_CONST char *s _AND
+rindex (const char *s,
 	int c)
 {
   return strrchr (s, c);

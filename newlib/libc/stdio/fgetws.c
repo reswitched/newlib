@@ -99,10 +99,9 @@ PORTABILITY
 #endif
 
 wchar_t *
-_DEFUN(_fgetws_r, (ptr, ws, n, fp),
-	struct _reent *ptr _AND
-	wchar_t * ws _AND
-	int n _AND
+_fgetws_r (struct _reent *ptr,
+	wchar_t * ws,
+	int n,
 	FILE * fp)
 {
   wchar_t *wsp;
@@ -172,9 +171,8 @@ error:
 }
 
 wchar_t *
-_DEFUN(fgetws, (ws, n, fp),
-	wchar_t *__restrict ws _AND
-	int n _AND
+fgetws (wchar_t *__restrict ws,
+	int n,
 	FILE *__restrict fp)
 {
   struct _reent *reent = _REENT;

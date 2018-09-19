@@ -78,9 +78,8 @@ static char sccsid[] = "%W% (Berkeley) %G%";
 #undef putc
 
 int
-_DEFUN(_putc_r, (ptr, c, fp),
-       struct _reent *ptr _AND
-       int c _AND
+_putc_r (struct _reent *ptr,
+       int c,
        register FILE *fp)
 {
   int result;
@@ -93,8 +92,7 @@ _DEFUN(_putc_r, (ptr, c, fp),
 
 #ifndef _REENT_ONLY
 int
-_DEFUN(putc, (c, fp),
-       int c _AND
+putc (int c,
        register FILE *fp)
 {
 #if !defined(PREFER_SIZE_OVER_SPEED) && !defined(__OPTIMIZE_SIZE__)

@@ -12,8 +12,10 @@
 #include "miscfuncs.h"
 #include "cygerrno.h"
 #include "pinfo.h"
+#include "hires.h"
 /* for getpid */
 #include <unistd.h>
+#include <sys/param.h>
 #include "registry.h"
 
 /* Win32 priority to UNIX priority Mapping. */
@@ -199,9 +201,9 @@ sched_rr_get_interval (pid_t pid, struct timespec *interval)
     slindex -= 1;
 
   nsec = quantable[vfindex][slindex][qindex] / quantapertick
-    * clocktickinterval * 1000000;
-  interval->tv_sec = nsec / 1000000000;
-  interval->tv_nsec = nsec % 1000000000;
+	 * clocktickinterval * (NSPERSEC / MSPERSEC);
+  interval->tv_sec = nsec / NSPERSEC;
+  interval->tv_nsec = nsec % NSPERSEC;
 
   return 0;
 }
@@ -409,4 +411,17 @@ sched_yield ()
   SwitchToThread ();
   return 0;
 }
+
+int
+sched_getcpu ()
+{
+  if (!wincap.has_processor_groups ())
+    return (int) GetCurrentProcessorNumber ();
+
+  PROCESSOR_NUMBER pnum;
+
+  GetCurrentProcessorNumberEx (&pnum);
+  return pnum.Group * __get_cpus_per_group () + pnum.Number;
 }
+
+} /* extern C */

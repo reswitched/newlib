@@ -52,26 +52,20 @@
    declaration error with the XPG variant implemented herein. */
 #define basename basename
 #include "winsup.h"
-#include "miscfuncs.h"
-#include <ctype.h>
-#include <winioctl.h>
-#include <shlobj.h>
+#include <w32api/winioctl.h>
+#include <w32api/shlobj.h>
 #include <sys/param.h>
 #include <sys/cygwin.h>
+#include <wctype.h>
+#include <assert.h>
 #include "cygerrno.h"
-#include "security.h"
 #include "path.h"
 #include "fhandler.h"
 #include "dtable.h"
 #include "cygheap.h"
 #include "shared_info.h"
-#include "cygtls.h"
 #include "tls_pbuf.h"
 #include "environ.h"
-#include <assert.h>
-#include <ntdll.h>
-#include <wchar.h>
-#include <wctype.h>
 #undef basename
 
 suffix_info stat_suffixes[] =
@@ -710,8 +704,6 @@ path_conv::check (const char *src, unsigned opt,
       /* This loop handles symlink expansion.  */
       for (;;)
 	{
-	  assert (src);
-
 	  is_relpath = !isabspath (src);
 	  error = normalize_posix_path (src, path_copy, tail);
 	  if (error > 0)
@@ -864,7 +856,7 @@ path_conv::check (const char *src, unsigned opt,
 			if (component == 0)
 			  {
 			    fileattr = 0;
-			    dev.parse (FH_TCP);
+			    dev.parse (FH_SOCKET);
 			  }
 			break;
 		      case virt_fsdir:
@@ -959,8 +951,13 @@ path_conv::check (const char *src, unsigned opt,
 		      return;
 		    }
 		  fileattr = sym.fileattr;
-		  dev.parse (FH_UNIX);
+#ifdef __WITH_AF_UNIX
+		  dev.parse ((sym.pflags & PATH_REP) ? FH_UNIX : FH_LOCAL);
+#else
+		  dev.parse (FH_LOCAL);
+#endif /* __WITH_AF_UNIX */
 		  dev.setfs (1);
+		  path_flags = sym.pflags;
 		  goto out;
 		}
 
@@ -1013,7 +1010,7 @@ path_conv::check (const char *src, unsigned opt,
 		  saw_symlinks = 1;
 		  if (component == 0 && !need_directory
 		      && (!(opt & PC_SYM_FOLLOW)
-			  || (is_rep_symlink ()
+			  || (is_known_reparse_point ()
 			      && (opt & PC_SYM_NOFOLLOW_REP))))
 		    {
 		      /* last component of path is a symlink. */
@@ -1343,6 +1340,7 @@ int
 normalize_win32_path (const char *src, char *dst, char *&tail)
 {
   const char *src_start = src;
+  const char *dst_start = dst;
   bool beg_src_slash = isdirsep (src[0]);
 
   tail = dst;
@@ -1377,27 +1375,56 @@ normalize_win32_path (const char *src, char *dst, char *&tail)
 	      src += 2;
 	    }
 	}
+      dst = tail;
+      /* If backslash is missing in src, add one. */
+      if (!isdirsep (src[0]))
+	*tail++ = '\\';
     }
-  if (tail == dst)
+  if (tail == dst_start)
     {
       if (isdrive (src))
-	/* Always convert drive letter to uppercase for case sensitivity. */
-	*tail++ = cyg_toupper (*src++);
+	{
+	  /* Always convert drive letter to uppercase for case sensitivity. */
+	  *tail++ = cyg_toupper (*src++);
+	  *tail++ = *src++;
+	  dst = tail;
+	  /* If backslash is missing in src, add one. */
+	  if (!isdirsep (src[0]))
+	    *tail++ = '\\';
+	}
       else if (*src != '/')
 	{
+	  /* Make sure dst points to the rightmost backslash which must not
+	     be backtracked over during ".." evaluation.  This is either
+	     the backslash after the network path prefix (i.e. "\\") or
+	     the backslash after a drive letter (i.e. C:\"). */
 	  if (beg_src_slash)
-	    tail += cygheap->cwd.get_drive (dst);
-	  else if (!cygheap->cwd.get (dst, 0))
-	    return get_errno ();
-	  else
+	    {
+	      tail += cygheap->cwd.get_drive (dst);
+	      /* network path, drive == '\\\\'?  Decrement tail to avoid
+	         triple backslash in output. */
+	      if (dst[0] == '\\')
+		--tail;
+	      dst = tail;
+	    }
+	  else if (cygheap->cwd.get (dst, 0))
 	    {
 	      tail = strchr (tail, '\0');
 	      if (tail[-1] != '\\')
 		*tail++ = '\\';
+	      ++dst;
+	      if (dst[1] == '\\')
+		++dst;
 	    }
+	  else
+	    return get_errno ();
 	}
     }
 
+  /* At this point dst points to the first backslash, even if it only gets
+     written in the first iteration of the following loop.  Backing up to
+     handle ".." components can not underrun that border (thus avoiding
+     subsequent buffer underruns with fatal results). */
   while (*src)
     {
       /* Strip duplicate /'s.  */
@@ -1414,9 +1441,7 @@ normalize_win32_path (const char *src, char *dst, char *&tail)
 	}
 
       /* Backup if "..".  */
-      else if (src[0] == '.' && src[1] == '.'
-	       /* dst must be greater than dst_start */
-	       && tail[-1] == '\\')
+      else if (src[0] == '.' && src[1] == '.' && tail[-1] == '\\')
 	{
 	  if (!isdirsep (src[2]) && src[2] != '\0')
 	      *tail++ = *src++;
@@ -1449,7 +1474,7 @@ normalize_win32_path (const char *src, char *dst, char *&tail)
   if (tail > dst + 1 && tail[-1] == '.' && tail[-2] == '\\')
     tail--;
   *tail = '\0';
-  debug_printf ("%s = normalize_win32_path (%s)", dst, src_start);
+  debug_printf ("%s = normalize_win32_path (%s)", dst_start, src_start);
   return 0;
 }
 
@@ -2337,7 +2362,7 @@ check_reparse_point_target (HANDLE h, bool remote, PREPARSE_DATA_BUFFER rp,
 		rp->SymbolicLinkReparseBuffer.SubstituteNameLength);
       if ((rp->SymbolicLinkReparseBuffer.Flags & SYMLINK_FLAG_RELATIVE) ||
           check_reparse_point_string (psymbuf))
-	return 1;
+	return PATH_SYMLINK | PATH_REP;
     }
   else if (!remote && rp->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
     {
@@ -2358,8 +2383,17 @@ check_reparse_point_target (HANDLE h, bool remote, PREPARSE_DATA_BUFFER rp,
 	  return -EPERM;
 	}
       if (check_reparse_point_string (psymbuf))
-	return 1;
+	return PATH_SYMLINK | PATH_REP;
     }
+#ifdef __WITH_AF_UNIX
+  else if (rp->ReparseTag == IO_REPARSE_TAG_CYGUNIX)
+    {
+      PREPARSE_GUID_DATA_BUFFER rgp = (PREPARSE_GUID_DATA_BUFFER) rp;
+
+      if (memcmp (CYGWIN_SOCKET_GUID, &rgp->ReparseGuid, sizeof (GUID)) == 0)
+	return PATH_SOCKET | PATH_REP;
+    }
+#endif /* __WITH_AF_UNIX */
   return 0;
 }
 
@@ -2385,10 +2419,11 @@ symlink_info::check_reparse_point (HANDLE h, bool remote)
       fileattr &= ~FILE_ATTRIBUTE_REPARSE_POINT;
       return ret;
     }
-  /* ret is > 0, so it's a reparse point, path in symbuf. */
-  sys_wcstombs (srcbuf, SYMLINK_MAX + 7, symbuf.Buffer,
-		symbuf.Length / sizeof (WCHAR));
-  pflags |= PATH_SYMLINK | PATH_REP;
+  /* ret is > 0, so it's a known reparse point, path in symbuf. */
+  pflags |= ret;
+  if (ret & PATH_SYMLINK)
+    sys_wcstombs (srcbuf, SYMLINK_MAX + 7, symbuf.Buffer,
+		  symbuf.Length / sizeof (WCHAR));
   /* A symlink is never a directory. */
   fileattr &= ~FILE_ATTRIBUTE_DIRECTORY;
   return posixify (srcbuf);
@@ -2800,7 +2835,7 @@ restart:
 	      if (*p != '.' && *p != ' ')
 		{
 		  while (*--p != '\\')
-		    ;
+		    assert(p >= path);
 		  if (*++p != ' ')
 		    p = NULL;
 		}
@@ -4281,11 +4316,40 @@ find_fast_cwd ()
      used on the system. */
   fcwd_access_t **f_cwd_ptr = find_fast_cwd_pointer ();
   if (!f_cwd_ptr)
-    small_printf ("Cygwin WARNING:\n"
+    {
+      bool warn = 1;
+
+#ifndef __x86_64__
+      #ifndef PROCESSOR_ARCHITECTURE_ARM64
+      #define PROCESSOR_ARCHITECTURE_ARM64 12
+      #endif
+
+      SYSTEM_INFO si;
+
+      /* Check if we're running in WOW64 on ARM64.  Skip the warning as long as
+	 there's no solution for finding the FAST_CWD pointer on that system.
+
+	 2018-07-12: Apparently current ARM64 WOW64 has a bug:
+	 It's GetNativeSystemInfo returns PROCESSOR_ARCHITECTURE_INTEL in
+	 wProcessorArchitecture.  Since that's an invalid value (a 32 bit
+	 host system hosting a 32 bit emulator for itself?) we can use this
+	 value as an indicator to skip the message as well. */
+      if (wincap.is_wow64 ())
+	{
+	  GetNativeSystemInfo (&si);
+	  if (si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_ARM64
+	      || si.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_INTEL)
+	    warn = 0;
+	}
+#endif /* !__x86_64__ */
+
+      if (warn)
+	small_printf ("Cygwin WARNING:\n"
 "  Couldn't compute FAST_CWD pointer.  This typically occurs if you're using\n"
 "  an older Cygwin version on a newer Windows.  Please update to the latest\n"
 "  available Cygwin version from https://cygwin.com/.  If the problem persists,\n"
 "  please see https://cygwin.com/problems.html\n\n");
+    }
   if (f_cwd_ptr && *f_cwd_ptr)
     {
       /* Just evaluate structure version. */
@@ -4366,43 +4430,38 @@ cwdstuff::override_win32_cwd (bool init, ULONG old_dismount_count)
     }
   else
     {
-      /* This is more a hack, and it's only used if we failed to find the
-	 fast_cwd_ptr value.  We call RtlSetCurrentDirectory_U and let it
-	 set up a new FAST_CWD structure.  Afterwards, compute the address
-	 of that structure utilizing the fact that the buffer address in
-	 the user process parameter block is actually pointing to the buffer
-	 in that FAST_CWD structure.  Then replace the directory handle in
-	 that structure with our own handle and close the original one.
+      /* Fallback if we failed to find the fast_cwd_ptr value:
 
-	 Note that the call to RtlSetCurrentDirectory_U also closes our
-	 old dir handle, so there won't be any handle left open.
+	 - Call RtlSetCurrentDirectory_U.
+	 - Compute new FAST_CWD struct address from buffer pointer in the
+	   user process parameter block.
+	 - Replace the directory handle in the struct with our own handle.
+	 - Close the original handle.  RtlSetCurrentDirectory_U already
+	   closed our former dir handle -> no handle leak.
 
-	 This method is prone to two race conditions:
+	 Guard the entire operation with FastPebLock to avoid races
+	 accessing the PEB and FAST_CWD struct.
 
-	 - Due to the way RtlSetCurrentDirectory_U opens the directory
-	   handle, the directory is locked against deletion or renaming
-	   between the RtlSetCurrentDirectory_U and the subsequent NtClose
-	   call.
+	 Unfortunately this method is still prone to a directory usage
+	 race condition:
 
-	 - When another thread calls SetCurrentDirectory at exactly the
-	   same time, a crash might occur, or worse, unrelated data could
-	   be overwritten or NtClose could be called on an unrelated handle.
-
-	 Therefore, use this *only* as a fallback. */
+	 - The directory is locked against deletion or renaming between the
+	   RtlSetCurrentDirectory_U and the subsequent NtClose call. */
+      if (unlikely (upp_cwd_hdl == NULL) && init)
+	return;
+      RtlEnterCriticalSection (peb.FastPebLock);
       if (!init)
 	{
 	  NTSTATUS status =
 	    RtlSetCurrentDirectory_U (error ? &ro_u_pipedir : &win32);
 	  if (!NT_SUCCESS (status))
 	    {
+	      RtlLeaveCriticalSection (peb.FastPebLock);
 	      debug_printf ("RtlSetCurrentDirectory_U(%S) failed, %y",
 			    error ? &ro_u_pipedir : &win32, status);
 	      return;
 	    }
 	}
-      else if (upp_cwd_hdl == NULL)
-	return;
-      RtlEnterCriticalSection (peb.FastPebLock);
       fcwd_access_t::SetDirHandleFromBufferPointer(upp_cwd_str.Buffer, dir);
       h = upp_cwd_hdl;
       upp_cwd_hdl = dir;

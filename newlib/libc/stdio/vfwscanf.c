@@ -138,7 +138,7 @@ C99, POSIX-1.2008
 #define _NO_LONGDBL
 #if defined _WANT_IO_LONG_DOUBLE && (LDBL_MANT_DIG > DBL_MANT_DIG)
 #undef _NO_LONGDBL
-extern _LONG_DOUBLE _wcstold_r _PARAMS((wchar_t *s, wchar_t **sptr));
+extern _LONG_DOUBLE _wcstold_r (wchar_t *s, wchar_t **sptr);
 #endif
 
 #include "floatio.h"
@@ -226,9 +226,8 @@ static void * get_arg (int, va_list *, int *, void **);
 #ifndef _REENT_ONLY
 
 int
-_DEFUN(VFWSCANF, (fp, fmt, ap),
-       register FILE *__restrict fp _AND
-       _CONST wchar_t *__restrict fmt _AND
+VFWSCANF (register FILE *__restrict fp,
+       const wchar_t *__restrict fmt,
        va_list ap)
 {
   struct _reent *reent = _REENT;
@@ -238,9 +237,8 @@ _DEFUN(VFWSCANF, (fp, fmt, ap),
 }
 
 int
-_DEFUN(__SVFWSCANF, (fp, fmt0, ap),
-       register FILE *fp _AND
-       wchar_t _CONST *fmt0 _AND
+__SVFWSCANF (register FILE *fp,
+       wchar_t const *fmt0,
        va_list ap)
 {
   return __SVFWSCANF_R (_REENT, fp, fmt0, ap);
@@ -249,10 +247,9 @@ _DEFUN(__SVFWSCANF, (fp, fmt0, ap),
 #endif /* !_REENT_ONLY */
 
 int
-_DEFUN(_VFWSCANF_R, (data, fp, fmt, ap),
-       struct _reent *data _AND
-       register FILE *fp   _AND
-       _CONST wchar_t *fmt    _AND
+_VFWSCANF_R (struct _reent *data,
+       register FILE *fp,
+       const wchar_t *fmt,
        va_list ap)
 {
   CHECK_INIT(data, fp);
@@ -265,9 +262,8 @@ _DEFUN(_VFWSCANF_R, (data, fp, fmt, ap),
  * regular ungetwc which will drag in file I/O items we don't need.
  * So, we create our own trimmed-down version.  */
 static wint_t
-_DEFUN(_sungetwc_r, (data, fp, ch),
-	struct _reent *data _AND
-	wint_t wc           _AND
+_sungetwc_r (struct _reent *data,
+	wint_t wc,
 	register FILE *fp)
 {
   if (wc == WEOF)
@@ -322,11 +318,10 @@ _DEFUN(_sungetwc_r, (data, fp, ch),
   return wc;
 }
 
-extern int __ssrefill_r _PARAMS ((struct _reent *ptr, register FILE * fp));
+extern int __ssrefill_r (struct _reent *ptr, register FILE * fp);
 
 static size_t
-_DEFUN(_sfgetwc_r, (ptr, fp),
-       struct _reent * ptr _AND
+_sfgetwc_r (struct _reent * ptr,
        FILE * fp)
 {
   wchar_t wc;
@@ -341,10 +336,9 @@ _DEFUN(_sfgetwc_r, (ptr, fp),
 #endif /* STRING_ONLY */
 
 int
-_DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
-       struct _reent *rptr _AND
-       register FILE *fp   _AND
-       wchar_t _CONST *fmt0   _AND
+__SVFWSCANF_R (struct _reent *rptr,
+       register FILE *fp,
+       wchar_t const *fmt0,
        va_list ap)
 {
   register wchar_t *fmt = (wchar_t *) fmt0;
@@ -367,7 +361,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 
   mbstate_t mbs;                /* value to keep track of multibyte state */
 
-  #define CCFN_PARAMS	_PARAMS((struct _reent *, const wchar_t *, wchar_t **, int))
+  #define CCFN_PARAMS	(struct _reent *, const wchar_t *, wchar_t **, int)
   unsigned long (*ccfn)CCFN_PARAMS=0;	/* conversion function (wcstol/wcstoul) */
   wchar_t buf[BUF];		/* buffer for numeric conversions */
   const wchar_t *ccls;          /* character class start */
@@ -514,7 +508,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 #endif
 
   /* `basefix' is used to avoid `if' tests in the integer scanner */
-  static _CONST short basefix[17] =
+  static const short basefix[17] =
     {10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
   /* Macro to support positional arguments */
@@ -936,7 +930,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 	      else
 		mbp = GET_ARG(N, ap, char *);
 	      n = 0;
-	      memset ((_PTR)&mbs, '\0', sizeof (mbstate_t));
+	      memset ((void *)&mbs, '\0', sizeof (mbstate_t));
 	      while (width != 0 && (wi = _fgetwc_r (rptr, fp)) != WEOF)
 		{
 		  nconv = _wcrtomb_r (rptr, mbp, wi, &mbs);
@@ -1028,7 +1022,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 	      else
 		mbp = GET_ARG(N, ap, char *);
 	      n = 0;
-	      memset ((_PTR) &mbs, '\0', sizeof (mbstate_t));
+	      memset ((void *) &mbs, '\0', sizeof (mbstate_t));
 	      while ((wi = _fgetwc_r (rptr, fp)) != WEOF
 		     && width != 0 && INCCL (wi))
 		{
@@ -1117,7 +1111,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 #endif
 	      else
 		mbp = GET_ARG(N, ap, char *);
-	      memset ((_PTR) &mbs, '\0', sizeof (mbstate_t));
+	      memset ((void *) &mbs, '\0', sizeof (mbstate_t));
 	      while ((wi = _fgetwc_r (rptr, fp)) != WEOF
 		     && width != 0 && !iswspace (wi))
 		{
@@ -1642,7 +1636,7 @@ _DEFUN(__SVFWSCANF_R, (rptr, fp, fmt0, ap),
 		{
 		  flp = GET_ARG (N, ap, float *);
 		  if (isnan (res))
-		    *flp = nanf (NULL);
+		    *flp = nanf ("");
 		  else
 		    *flp = res;
 		}

@@ -11,6 +11,8 @@ __stack_chk_guard DATA
 _check_for_executable DATA
 _ctype_ DATA
 _daylight DATA
+_fe_dfl_env DATA
+_fe_nomask_env DATA
 _impure_ptr DATA
 _sys_errlist DATA
 _sys_nerr DATA
@@ -193,6 +195,13 @@ acosh NOSIGFE
 acoshf NOSIGFE
 acoshl NOSIGFE
 acosl NOSIGFE
+aio_cancel SIGFE
+aio_error NOSIGFE
+aio_fsync SIGFE
+aio_read SIGFE
+aio_return NOSIGFE
+aio_suspend SIGFE
+aio_write SIGFE
 alarm SIGFE
 aligned_alloc SIGFE
 alphasort NOSIGFE
@@ -274,6 +283,9 @@ catanh NOSIGFE
 catanhf NOSIGFE
 catanhl NOSIGFE
 catanl NOSIGFE
+catclose SIGFE
+catgets SIGFE
+catopen SIGFE
 cbrt NOSIGFE
 cbrtf NOSIGFE
 cbrtl NOSIGFE
@@ -303,6 +315,7 @@ cimag NOSIGFE
 cimagf NOSIGFE
 cimagl NOSIGFE
 cleanup_glue NOSIGFE
+clearenv SIGFE
 clearerr SIGFE
 clearerr_unlocked SIGFE
 clock SIGFE
@@ -837,6 +850,7 @@ lgammal_r NOSIGFE
 lgetxattr SIGFE
 link SIGFE
 linkat SIGFE
+lio_listio SIGFE
 listen = cygwin_listen SIGFE
 listxattr SIGFE
 llabs NOSIGFE
@@ -1131,6 +1145,8 @@ pthread_spin_trylock SIGFE
 pthread_spin_unlock SIGFE
 pthread_suspend SIGFE
 pthread_testcancel SIGFE
+pthread_timedjoin_np SIGFE
+pthread_tryjoin_np SIGFE
 pthread_yield = sched_yield SIGFE
 ptsname SIGFE
 ptsname_r SIGFE
@@ -1233,6 +1249,7 @@ scandirat SIGFE
 scanf SIGFE
 sched_get_priority_max SIGFE
 sched_get_priority_min SIGFE
+sched_getcpu SIGFE
 sched_getparam SIGFE
 sched_getscheduler NOSIGFE
 sched_rr_get_interval SIGFE

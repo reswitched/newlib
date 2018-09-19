@@ -24,9 +24,8 @@ QUICKREF
 #include <strings.h>
 
 void
-_DEFUN (bcopy, (b1, b2, length),
-	_CONST void *b1 _AND
-	void *b2 _AND
+bcopy (const void *b1,
+	void *b2,
 	size_t length)
 {
   memmove (b2, b1, length);

@@ -57,8 +57,7 @@ Required OS subroutines: <<close>>, <<fstat>>, <<isatty>>, <<lseek>>,
 #include "local.h"
 
 int
-_DEFUN(_fcloseall_r, (ptr),
-       struct _reent *ptr)
+_fcloseall_r (struct _reent *ptr)
 {
   return _fwalk_reent (ptr, _fclose_r);
 }
@@ -66,7 +65,7 @@ _DEFUN(_fcloseall_r, (ptr),
 #ifndef _REENT_ONLY
 
 int
-_DEFUN_VOID(fcloseall)
+fcloseall (void)
 {
   return _fcloseall_r (_GLOBAL_REENT);
 }

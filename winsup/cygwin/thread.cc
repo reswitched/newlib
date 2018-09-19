@@ -663,7 +663,7 @@ pthread::cancel ()
    Required cancellation points:
 
     * accept ()
-    o aio_suspend ()
+    * aio_suspend ()
     * clock_nanosleep ()
     * close ()
     * connect ()
@@ -839,7 +839,7 @@ pthread::cancel ()
       ioctl ()
       link ()
       linkat ()
-    o lio_listio ()
+    * lio_listio ()
       localtime ()
       localtime_r ()
     * lockf ()
@@ -2421,7 +2421,7 @@ pthread_attr_destroy (pthread_attr_t *attr)
 }
 
 int
-pthread::join (pthread_t *thread, void **return_val)
+pthread::join (pthread_t *thread, void **return_val, PLARGE_INTEGER timeout)
 {
    pthread_t joiner = self ();
 
@@ -2453,7 +2453,7 @@ pthread::join (pthread_t *thread, void **return_val)
       (*thread)->attr.joinable = PTHREAD_CREATE_DETACHED;
       (*thread)->mutex.unlock ();
 
-      switch (cygwait ((*thread)->win32_obj_id, cw_infinite,
+      switch (cygwait ((*thread)->win32_obj_id, timeout,
 		       cw_sig | cw_sig_restart | cw_cancel))
 	{
 	case WAIT_OBJECT_0:
@@ -2468,6 +2468,11 @@ pthread::join (pthread_t *thread, void **return_val)
 	  joiner->cancel_self ();
 	  // never reached
 	  break;
+	case WAIT_TIMEOUT:
+	  // set joined thread back to joinable since we got canceled
+	  (*thread)->joiner = NULL;
+	  (*thread)->attr.joinable = PTHREAD_CREATE_JOINABLE;
+	  return (timeout && timeout->QuadPart == 0LL) ? EBUSY : ETIMEDOUT;
 	default:
 	  // should never happen
 	  return EINVAL;
@@ -2546,7 +2551,7 @@ pthread_convert_abstime (clockid_t clock_id, const struct timespec *abstime,
   /* According to SUSv3, the abstime value must be checked for validity. */
   if (abstime->tv_sec < 0
       || abstime->tv_nsec < 0
-      || abstime->tv_nsec > 999999999)
+      || abstime->tv_nsec >= NSPERSEC)
     return EINVAL;
 
   /* Check for immediate timeout before converting */
@@ -2556,8 +2561,9 @@ pthread_convert_abstime (clockid_t clock_id, const struct timespec *abstime,
 	  && tp.tv_nsec > abstime->tv_nsec))
     return ETIMEDOUT;
 
-  timeout->QuadPart = abstime->tv_sec * NSPERSEC
-		     + (abstime->tv_nsec + 99LL) / 100LL;
+  timeout->QuadPart = abstime->tv_sec * NS100PERSEC
+		     + (abstime->tv_nsec + (NSPERSEC/NS100PERSEC) - 1)
+		       / (NSPERSEC/NS100PERSEC);
   switch (clock_id)
     {
     case CLOCK_REALTIME:
@@ -2565,11 +2571,38 @@ pthread_convert_abstime (clockid_t clock_id, const struct timespec *abstime,
       break;
     default:
       /* other clocks must be handled as relative timeout */
-      timeout->QuadPart -= tp.tv_sec * NSPERSEC + tp.tv_nsec / 100LL;
+      timeout->QuadPart -= tp.tv_sec * NS100PERSEC + tp.tv_nsec
+			   / (NSPERSEC/NS100PERSEC);
       timeout->QuadPart *= -1LL;
       break;
     }
   return 0;
+}
+
+extern "C" int
+pthread_join (pthread_t thread, void **return_val)
+{
+  return pthread::join (&thread, (void **) return_val, NULL);
+}
+
+extern "C" int
+pthread_tryjoin_np (pthread_t thread, void **return_val)
+{
+  LARGE_INTEGER timeout = { QuadPart:0LL };
+
+  return pthread::join (&thread, (void **) return_val, &timeout);
+}
+
+extern "C" int
+pthread_timedjoin_np (pthread_t thread, void **return_val,
+		      const struct timespec *abstime)
+{
+  LARGE_INTEGER timeout;
+
+  int err = pthread_convert_abstime (CLOCK_REALTIME, abstime, &timeout);
+  if (err)
+    return err;
+  return pthread::join (&thread, (void **) return_val, &timeout);
 }
 
 extern "C" int
@@ -2682,6 +2715,20 @@ pthread_setname_np (pthread_t thread, const char *name)
   return 0;
 }
 
+/* Returns running thread's name; works for both cygthreads and pthreads */
+char *
+mythreadname (void)
+{
+  char *result = (char *) cygthread::name ();
+
+  if (result == _my_tls.locals.unknown_thread_name)
+    {
+      result[0] = '\0';
+      pthread_getname_np (pthread_self (), result, (size_t) THRNAMELEN);
+    }
+
+  return result;
+}
 #undef THRNAMELEN
 
 /* provided for source level compatability.

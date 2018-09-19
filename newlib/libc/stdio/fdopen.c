@@ -53,10 +53,9 @@ PORTABILITY
 #include <_syslist.h>
 
 FILE *
-_DEFUN(_fdopen_r, (ptr, fd, mode),
-       struct _reent *ptr _AND
-       int fd             _AND
-       _CONST char *mode)
+_fdopen_r (struct _reent *ptr,
+       int fd,
+       const char *mode)
 {
   register FILE *fp;
   int flags, oflags;
@@ -94,7 +93,7 @@ _DEFUN(_fdopen_r, (ptr, fd, mode),
     _fcntl_r (ptr, fd, F_SETFL, fdflags | O_APPEND);
 #endif
   fp->_file = fd;
-  fp->_cookie = (_PTR) fp;
+  fp->_cookie = (void *) fp;
 
 #undef _read
 #undef _write
@@ -123,9 +122,8 @@ _DEFUN(_fdopen_r, (ptr, fd, mode),
 #ifndef _REENT_ONLY
 
 FILE *
-_DEFUN(fdopen, (fd, mode),
-       int fd _AND
-       _CONST char *mode)
+fdopen (int fd,
+       const char *mode)
 {
   return _fdopen_r (_REENT, fd, mode);
 }

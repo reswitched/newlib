@@ -45,11 +45,10 @@ DESCRIPTION
 */
 
 int
-_DEFUN (_execve_r, (ptr, name, argv, env),
-     struct _reent *ptr _AND
-     _CONST char *name _AND
-     char *_CONST argv[] _AND
-     char *_CONST env[])
+_execve_r (struct _reent *ptr,
+     const char *name,
+     char *const argv[],
+     char *const env[])
 {
   int ret;
 
@@ -81,8 +80,7 @@ DESCRIPTION
 #ifndef NO_FORK
 
 int
-_DEFUN (_fork_r, (ptr),
-     struct _reent *ptr)
+_fork_r (struct _reent *ptr)
 {
   int ret;
 
@@ -113,8 +111,7 @@ DESCRIPTION
 */
 
 int
-_DEFUN (_wait_r, (ptr, status),
-     struct _reent *ptr _AND
+_wait_r (struct _reent *ptr,
      int *status)
 {
   int ret;

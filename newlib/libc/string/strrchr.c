@@ -30,11 +30,10 @@ QUICKREF
 #include <string.h>
 
 char *
-_DEFUN (strrchr, (s, i),
-	_CONST char *s _AND
+strrchr (const char *s,
 	int i)
 {
-  _CONST char *last = NULL;
+  const char *last = NULL;
 
   if (i)
     {

@@ -224,9 +224,8 @@ typedef unsigned long long u_long_long;
 #ifndef _REENT_ONLY
 
 int
-_DEFUN(VFSCANF, (fp, fmt, ap),
-       register FILE *fp _AND
-       _CONST char *fmt _AND
+VFSCANF (register FILE *fp,
+       const char *fmt,
        va_list ap)
 {
   struct _reent *reent = _REENT;
@@ -236,9 +235,8 @@ _DEFUN(VFSCANF, (fp, fmt, ap),
 }
 
 int
-_DEFUN(__SVFSCANF, (fp, fmt0, ap),
-       register FILE *fp _AND
-       char _CONST *fmt0 _AND
+__SVFSCANF (register FILE *fp,
+       char const *fmt0,
        va_list ap)
 {
   return __SVFSCANF_R (_REENT, fp, fmt0, ap);
@@ -247,10 +245,9 @@ _DEFUN(__SVFSCANF, (fp, fmt0, ap),
 #endif /* !_REENT_ONLY */
 
 int
-_DEFUN(_VFSCANF_R, (data, fp, fmt, ap),
-       struct _reent *data _AND
-       register FILE *fp   _AND
-       _CONST char *fmt    _AND
+_VFSCANF_R (struct _reent *data,
+       register FILE *fp,
+       const char *fmt,
        va_list ap)
 {
   CHECK_INIT(data, fp);
@@ -263,9 +260,8 @@ _DEFUN(_VFSCANF_R, (data, fp, fmt, ap),
  * regular ungetc which will drag in file I/O items we don't need.
  * So, we create our own trimmed-down version.  */
 int
-_DEFUN(_sungetc_r, (data, fp, ch),
-	struct _reent *data _AND
-	int c               _AND
+_sungetc_r (struct _reent *data,
+	int c,
 	register FILE *fp)
 {
   if (c == EOF)
@@ -321,8 +317,7 @@ _DEFUN(_sungetc_r, (data, fp, ch),
 
 /* String only version of __srefill_r for sscanf family.  */
 int
-_DEFUN(__ssrefill_r, (ptr, fp),
-       struct _reent * ptr _AND
+__ssrefill_r (struct _reent * ptr,
        register FILE * fp)
 {
   /*
@@ -347,11 +342,10 @@ _DEFUN(__ssrefill_r, (ptr, fp),
 }
 
 size_t
-_DEFUN(_sfread_r, (ptr, buf, size, count, fp),
-       struct _reent * ptr _AND
-       _PTR buf _AND
-       size_t size _AND
-       size_t count _AND
+_sfread_r (struct _reent * ptr,
+       void *buf,
+       size_t size,
+       size_t count,
        FILE * fp)
 {
   register size_t resid;
@@ -367,7 +361,7 @@ _DEFUN(_sfread_r, (ptr, buf, size, count, fp),
 
   while (resid > (r = fp->_r))
     {
-      _CAST_VOID memcpy ((_PTR) p, (_PTR) fp->_p, (size_t) r);
+      (void) memcpy ((void *) p, (void *) fp->_p, (size_t) r);
       fp->_p += r;
       fp->_r = 0;
       p += r;
@@ -378,15 +372,15 @@ _DEFUN(_sfread_r, (ptr, buf, size, count, fp),
           return (total - resid) / size;
         }
     }
-  _CAST_VOID memcpy ((_PTR) p, (_PTR) fp->_p, resid);
+  (void) memcpy ((void *) p, (void *) fp->_p, resid);
   fp->_r -= resid;
   fp->_p += resid;
   return count;
 }
 #else /* !STRING_ONLY || !INTEGER_ONLY */
-int _EXFUN (_sungetc_r, (struct _reent *, int, register FILE *));
-int _EXFUN (__ssrefill_r, (struct _reent *, register FILE *));
-size_t _EXFUN (_sfread_r, (struct _reent *, _PTR buf, size_t, size_t, FILE *));
+int _sungetc_r (struct _reent *, int, register FILE *);
+int __ssrefill_r (struct _reent *, register FILE *);
+size_t _sfread_r (struct _reent *, void *buf, size_t, size_t, FILE *);
 #endif /* !STRING_ONLY || !INTEGER_ONLY */
 
 static inline int
@@ -402,10 +396,9 @@ __wctob (struct _reent *rptr, wint_t wc)
 }
 
 int
-_DEFUN(__SVFSCANF_R, (rptr, fp, fmt0, ap),
-       struct _reent *rptr _AND
-       register FILE *fp   _AND
-       char _CONST *fmt0   _AND
+__SVFSCANF_R (struct _reent *rptr,
+       register FILE *fp,
+       char const *fmt0,
        va_list ap)
 {
   register u_char *fmt = (u_char *) fmt0;
@@ -428,7 +421,7 @@ _DEFUN(__SVFSCANF_R, (rptr, fp, fmt0, ap),
   int nbytes = 1;               /* number of bytes read from fmt string */
   wchar_t wc;                   /* wchar to use to read format string */
   wchar_t *wcp;                 /* handy wide character pointer */
-  size_t mbslen;                /* length of converted multibyte sequence */
+  size_t mbslen = 0;            /* length of converted multibyte sequence */
 #ifdef _MB_CAPABLE
   mbstate_t state;              /* value to keep track of multibyte state */
 #endif
@@ -554,7 +547,7 @@ _DEFUN(__SVFSCANF_R, (rptr, fp, fmt0, ap),
     while (0)
 #endif
 
-  #define CCFN_PARAMS	_PARAMS((struct _reent *, const char *, char **, int))
+  #define CCFN_PARAMS	(struct _reent *, const char *, char **, int)
   u_long (*ccfn)CCFN_PARAMS=0;	/* conversion function (strtol/strtoul) */
   char ccltab[256];		/* character class table for %[...] */
   char buf[BUF];		/* buffer for numeric conversions */
@@ -574,7 +567,7 @@ _DEFUN(__SVFSCANF_R, (rptr, fp, fmt0, ap),
 #endif
 
   /* `basefix' is used to avoid `if' tests in the integer scanner */
-  static _CONST short basefix[17] =
+  static const short basefix[17] =
     {10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
 
   /* Macro to support positional arguments */
@@ -1893,7 +1886,7 @@ _DEFUN(__SVFSCANF_R, (rptr, fp, fmt0, ap),
 		{
 		  flp = GET_ARG (N, ap, float *);
 		  if (isnan (res))
-		    *flp = nanf (NULL);
+		    *flp = nanf ("");
 		  else
 		    *flp = res;
 		}

@@ -57,8 +57,7 @@ Supporting OS subroutines required: <<close>>, <<fstat>>, <<isatty>>,
 #include <_ansi.h>
 
 double
-_DEFUN (atof, (s),
-	_CONST char *s)
+atof (const char *s)
 {
   return strtod (s, NULL);
 }
